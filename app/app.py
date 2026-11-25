@@ -136,8 +136,8 @@ STYLE = f"""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap');
 .stApp {{ font-family: {FONT_STACK}; background: {CANVAS}; color: {INK}; font-variant-numeric: tabular-nums; }}
-/* Streamlit Community Cloud adds a fixed host bar above the app content. */
-.block-container {{ padding-top: 5.5rem; max-width: 1440px; }}
+/* Reserve only the space needed for the hosted toolbar above the app. */
+.block-container {{ padding-top: 2.4rem; max-width: 1440px; }}
 h1 {{ font-size: 1.55rem !important; font-weight: 600 !important; letter-spacing: -0.01em; color: {INK} !important; }}
 h2 {{ font-size: 1.12rem !important; font-weight: 600 !important; color: {INK} !important; }}
 h3 {{ font-size: 1rem !important; font-weight: 600 !important; color: {INK} !important; }}
@@ -195,7 +195,8 @@ h3 {{ font-size: 1rem !important; font-weight: 600 !important; color: {INK} !imp
 hr {{ border-color: {RULE} !important; }}
 
 /* Brand row: logo, product line, status badge, theme switch. */
-.st-key-vx_brand {{ border-bottom: 1px solid {RULE}; padding: 0.55rem 0; margin: 0 0 1.35rem 0;
+.st-key-vx_brand {{ position: sticky; top: 4.6rem; z-index: 1000;
+    border-bottom: 1px solid {RULE}; padding: 0.55rem 0; margin: 0 0 1.35rem 0;
     background: {CANVAS}; }}
 .vx-mark {{ display: flex; align-items: center; gap: 0.75rem; }}
 .vx-logo {{ display: inline-flex; align-items: center; gap: 0.5rem; }}
@@ -234,12 +235,6 @@ hr {{ border-color: {RULE} !important; }}
     padding-top: 0.65rem; border-top: 1px solid {RULE}; font-size: 0.82rem; }}
 .vx-kv .k {{ color: {MUTED}; }}
 .vx-kv .v {{ color: {INK}; font-family: {MONO_STACK}; font-size: 0.8rem; }}
-.ctx {{
-    background: {CARD}; border: 1px solid {RULE}; border-radius: {RADIUS}; padding: 0.6rem 0.9rem;
-    margin: 0 0 1.1rem 0;
-    color: {BODY}; font-size: 0.84rem; line-height: 1.55; white-space: normal; overflow-wrap: anywhere; }}
-.ctx strong {{ color: {INK}; font-weight: 600; }}
-.ctx .muted {{ color: {MUTED}; }}
 .vx-strip {{ display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 1px; background: {RULE};
     border: 1px solid {RULE}; border-radius: {RADIUS}; overflow: hidden; margin: 1.1rem 0 1.6rem 0; }}
 .vx-cell {{ background: {CARD}; padding: 0.75rem 0.95rem; }}
@@ -396,16 +391,6 @@ document.querySelectorAll('.vx-header-nav a').forEach(a => {
             with theme:
                 st.iframe(theme_switch_html(), height=34, alt="Theme switch: light or dark")
             launch.html('<a class="vx-header-launch" href="./classify" target="_self">Launch Workspace</a>')
-
-
-def operational_context_banner() -> None:
-    st.html(
-        '<div class="ctx"><strong>Operating context:</strong> scores rank transactions for review. '
-        "A flag means <strong>elevated risk warranting review, not a determination of fraud</strong>. "
-        f'<span class="muted">Scenario:</span> missed fraud &#36;{FALSE_NEGATIVE_COST:,} | false positive '
-        f"&#36;{FALSE_POSITIVE_COST:,} | capacity {DAILY_REVIEW_CAPACITY:,} alerts/day. Masked C/D/M/V/id_ "
-        "columns: family labels only.</div>"
-    )
 
 
 # Section: Feature labelling
@@ -1592,7 +1577,6 @@ def render_overview() -> None:
 
 def render_classify() -> None:
     _, summary = _data()
-    operational_context_banner()
     st.title("Classify")
     single, batch = st.tabs(["Single transaction", "Batch upload (CSV)"])
     with single:
@@ -1605,13 +1589,11 @@ def render_classify() -> None:
 
 def render_alerts() -> None:
     scored, _ = _data()
-    operational_context_banner()
     page_alert_queue(scored)
 
 
 def render_investigate() -> None:
     scored, _ = _data()
-    operational_context_banner()
     bundle = get_main_bundle()
     if bundle is not None:
         page_investigation(scored, bundle)
@@ -1619,7 +1601,6 @@ def render_investigate() -> None:
 
 def render_simulator() -> None:
     scored, summary = _data()
-    operational_context_banner()
     page_threshold_simulator(scored, summary)
 
 

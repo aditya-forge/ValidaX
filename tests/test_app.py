@@ -75,7 +75,7 @@ def test_pages_render_without_errors(render):
     at = run_page(render)
     assert not at.exception, [e.message for e in at.exception]
     assert not at.error, [e.value for e in at.error]
-    assert any("not a determination of fraud" in h.proto.body for h in at.get("html"))
+    assert not any('class="ctx"' in h.proto.body for h in at.get("html"))
     after = {p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in PROTECTED}
     assert before == after
 
