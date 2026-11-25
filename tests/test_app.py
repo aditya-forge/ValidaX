@@ -62,7 +62,8 @@ def test_app_boots_with_top_navigation():
     at = AppTest.from_file(str(REPO / "app" / "app.py"), default_timeout=300).run()
     assert not at.exception, [e.message for e in at.exception]
     bodies = [h.proto.body for h in at.get("html")]
-    assert any('class="vx-header-nav"' in b for b in bodies)
+    links = [e.proto.label for e in at.get("page_link")]
+    assert links == ["Overview", "Classify", "Alerts", "Investigate", "Simulator"]   # native, session-preserving
     assert any("Launch Workspace" in b for b in bodies)
     assert any("vx-strip" in b and "&#36;566,840" in b for b in bodies)          # telemetry strip
 
@@ -125,7 +126,7 @@ def test_both_themes_share_one_stylesheet(console):
     css = re.sub(r'url\("data:[^)]*\)', "", console.STYLE)
     assert "light-dark(" in css
     assert not re.findall(r"#[0-9A-Fa-f]{6}", re.sub(r"light-dark\([^)]*\)", "", css))
-    assert "box-shadow: none" in css and "gradient" not in css
+    assert not re.search(r"box-shadow:\s*(?!none)", css) and "gradient" not in css   # flat: no shadows
 
 
 def test_theme_switch_targets_every_page(console):

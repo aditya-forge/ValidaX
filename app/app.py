@@ -137,7 +137,7 @@ STYLE = f"""
 @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap');
 .stApp {{ font-family: {FONT_STACK}; background: {CANVAS}; color: {INK}; font-variant-numeric: tabular-nums; }}
 /* Reserve only the space needed for the hosted toolbar above the app. */
-.block-container {{ padding-top: 2.4rem; max-width: 1440px; }}
+.block-container {{ padding-top: 1.25rem; max-width: 1440px; }}
 h1 {{ font-size: 1.55rem !important; font-weight: 600 !important; letter-spacing: -0.01em; color: {INK} !important; }}
 h2 {{ font-size: 1.12rem !important; font-weight: 600 !important; color: {INK} !important; }}
 h3 {{ font-size: 1rem !important; font-weight: 600 !important; color: {INK} !important; }}
@@ -149,14 +149,7 @@ h3 {{ font-size: 1rem !important; font-weight: 600 !important; color: {INK} !imp
 /* Hide Streamlit's empty native bar; the branded row below is the app header. */
 [data-testid="stHeader"] {{ display: none !important; }}
 [data-testid="stSidebar"], [data-testid="stSidebarCollapsedControl"] {{ display: none; }}
-/* Native navigation is replaced by the compact branded navigation row below. */
-[data-testid="stTopNav"], [data-testid="stNavigation"] {{ display: none !important; }}
-[data-testid="stTopNavLink"] {{ background: transparent !important; border-radius: 0 !important;
-    border-bottom: 2px solid transparent; }}
-[data-testid="stTopNavLink"] p {{ color: {MUTED} !important; font-weight: 500; }}
-[data-testid="stTopNavLink"]:hover p {{ color: {INK} !important; }}
-[data-testid="stTopNavLink"][aria-current="page"] {{ border-bottom-color: {ACCENT}; }}
-[data-testid="stTopNavLink"][aria-current="page"] p {{ color: {INK} !important; }}
+/* st.navigation runs hidden; the header row below carries the page links. */
 [data-testid="stBaseButton-header"] {{ color: {MUTED}; }}
 
 /* Native buttons: rectangular; primary is the accent with contrasting text. */
@@ -194,29 +187,33 @@ h3 {{ font-size: 1rem !important; font-weight: 600 !important; color: {INK} !imp
 .stTabs [data-baseweb="tab-highlight"] {{ background-color: {ACCENT} !important; }}
 hr {{ border-color: {RULE} !important; }}
 
-/* Brand row: logo, product line, status badge, theme switch. */
-.st-key-vx_brand {{ position: sticky; top: 4.6rem; z-index: 1000;
-    border-bottom: 1px solid {RULE}; padding: 0.55rem 0; margin: 0 0 1.35rem 0;
-    background: {CANVAS}; }}
+/* Header row: logo, page links, theme switch, launch. Static (not sticky) so the gap above
+   and below it is identical on every page; one rule line separates it from the page. */
+.st-key-vx_brand {{ border-bottom: 1px solid {RULE}; padding: 0.4rem 0; margin: 0 0 1.5rem 0; }}
 .vx-mark {{ display: flex; align-items: center; gap: 0.75rem; }}
 .vx-logo {{ display: inline-flex; align-items: center; gap: 0.5rem; }}
 .vx-shield {{ display: block; width: 32px; height: 32px; flex: none; }}
 .vx-word {{ color: {INK}; font-size: 1.2rem; font-weight: 600; letter-spacing: -0.02em; line-height: 1; }}
 .vx-word b {{ color: {ACCENT}; font-weight: 600; }}
-.vx-mark .desc {{ display: none; }}
-.vx-header-nav {{ display: flex; align-items: center; justify-content: center; gap: clamp(0.7rem, 2vw, 2rem); }}
-.vx-header-nav a {{ color: {MUTED}; text-decoration: none; font-size: 0.88rem; font-weight: 500;
-    padding: 0.85rem 0 0.72rem; border-bottom: 2px solid transparent; white-space: nowrap; }}
-.vx-header-nav a:hover, .vx-header-nav a[aria-current="page"] {{ color: {INK}; }}
-.vx-header-nav a[aria-current="page"] {{ border-bottom-color: {ACCENT}; }}
-.vx-header-actions {{ display: flex; align-items: center; justify-content: flex-end; gap: 0.75rem; }}
-.vx-header-launch {{ display: inline-flex; align-items: center; justify-content: center; padding: 0.58rem 0.9rem;
+.st-key-vx_nav {{ column-gap: clamp(0.4rem, 1.6vw, 1.6rem); }}
+.st-key-vx_nav [data-testid="stPageLink"] a {{ background: transparent !important; border-radius: 0 !important;
+    padding: 0.45rem 0.1rem 0.35rem; border-bottom: 2px solid transparent; }}
+.st-key-vx_nav [data-testid="stPageLink"] a:hover {{ background: transparent !important; }}
+.st-key-vx_nav [data-testid="stPageLink"] p {{ color: {MUTED} !important; font-size: 0.88rem; font-weight: 500;
+    white-space: nowrap; }}
+.st-key-vx_nav [data-testid="stPageLink"] a:hover p {{ color: {INK} !important; }}
+.st-key-vx_nav_on [data-testid="stPageLink"] a {{ border-bottom-color: {ACCENT}; }}
+.st-key-vx_nav_on [data-testid="stPageLink"] p {{ color: {INK} !important; font-weight: 600; }}
+.vx-header-actions {{ display: flex; justify-content: flex-end; }}
+.vx-header-launch {{ display: inline-flex; align-items: center; justify-content: center; padding: 0.55rem 0.9rem;
     background: {BUTTON}; border: 1px solid {BUTTON}; color: {ON_ACCENT} !important; text-decoration: none;
     font-size: 0.84rem; font-weight: 600; white-space: nowrap; border-radius: {RADIUS}; }}
 .vx-header-launch:hover {{ background: {BUTTON_HOVER}; border-color: {BUTTON_HOVER}; }}
+/* First heading on a page sits a fixed distance under the header rule. */
+.stMainBlockContainer h1 {{ padding-top: 0.25rem !important; }}
 
 /* Overview: title lockup, command callout, context box, telemetry strip. */
-.vx-lockup h1 {{ font-size: 1.9rem !important; line-height: 1.2; margin: 0.2rem 0 0.5rem 0; }}
+.vx-lockup h1 {{ font-size: 1.9rem !important; line-height: 1.2; margin: 0 0 0.5rem 0; }}
 .vx-lockup p {{ color: {BODY}; font-size: 0.98rem; line-height: 1.6; margin: 0; max-width: 78ch; }}
 .vx-box {{
     background: {CARD}; border: 1px solid {RULE}; border-radius: {RADIUS}; height: 100%;
@@ -242,10 +239,8 @@ hr {{ border-color: {RULE} !important; }}
 .vx-cell .v {{ color: {INK}; font-size: 1.35rem; font-weight: 600; margin-top: 0.15rem; }}
 .vx-cell .s {{ color: {MUTED}; font-size: 0.74rem; margin-top: 0.1rem; }}
 @media (max-width: 1100px) {{ .vx-strip {{ grid-template-columns: repeat(2, minmax(0, 1fr)); }} }}
-@media (max-width: 850px) {{ .vx-header-nav {{ gap: 0.55rem; }} .vx-header-nav a {{ font-size: 0.78rem; }}
-    .vx-header-launch {{ display: none; }} }}
-@media (max-width: 650px) {{ .vx-header-nav {{ overflow-x: auto; justify-content: flex-start; }}
-    .st-key-vx_brand [data-testid="stHorizontalBlock"] {{ flex-wrap: wrap; gap: 0.3rem; }} }}
+@media (max-width: 1000px) {{ .vx-header-launch {{ display: none; }}
+    .st-key-vx_nav [data-testid="stPageLink"] p {{ font-size: 0.8rem; }} }}
 
 /* Classification result: decision first. */
 .vx-result {{ display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1px; background: {RULE};
@@ -372,25 +367,29 @@ def theme_switch_html() -> str:
             .replace("__PAGES__", json.dumps([path for _, _, path in NAV_PAGES])))
 
 
-def brand_header() -> None:
-    """Compact branded navigation row matching the reference header layout."""
+def brand_header(pages: list | None = None, current=None) -> None:
+    """Logo left, page links centre, theme switch and Launch Workspace right.
+
+    Links are native st.page_link items, so switching pages keeps the session (a
+    classified transaction survives a trip to Investigate and back). The active page
+    is marked here in Python: st.html strips <script>, so it cannot be done client-side.
+    """
     with st.container(key="vx_brand"):
-        left, middle, right = st.columns([2.2, 5.2, 2.4], vertical_alignment="center")
+        left, middle, right = st.columns([2.2, 5.2, 2.6], vertical_alignment="center")
         left.html(f'<div class="vx-mark">{LOGO_HTML}</div>')
-        nav_html = '<nav class="vx-header-nav" aria-label="Main navigation">' + "".join(
-            f'<a href="./{path}" data-page="{path}">{title}</a>' for title, _, path in NAV_PAGES
-        ) + '</nav><script>\n'
-        nav_html += """const p = window.parent.location.pathname.replace(/\\/$/, '').split('/').pop();
-document.querySelectorAll('.vx-header-nav a').forEach(a => {
-  if ((p || 'overview') === a.dataset.page) a.setAttribute('aria-current', 'page');
-});
-</script>"""
-        middle.html(nav_html)
+        if pages:
+            with middle.container(horizontal=True, horizontal_alignment="center", vertical_alignment="center",
+                                  gap=None, key="vx_nav"):
+                for page in pages:
+                    active = current is not None and page.title == current.title
+                    with st.container(width="content", key="vx_nav_on" if active else f"vx_nav_{page.title.lower()}"):
+                        st.page_link(page, label=page.title)
         with right:
             theme, launch = st.columns([1, 1.8], vertical_alignment="center")
             with theme:
                 st.iframe(theme_switch_html(), height=34, alt="Theme switch: light or dark")
-            launch.html('<a class="vx-header-launch" href="./classify" target="_self">Launch Workspace</a>')
+            launch.html('<div class="vx-header-actions"><a class="vx-header-launch" href="./classify" '
+                        'target="_self">Launch Workspace</a></div>')
 
 
 # Section: Feature labelling
@@ -1622,7 +1621,7 @@ def main():
 
     missing = missing_core_outputs()
     if missing:
-        brand_header()
+        brand_header(pages, navigation)
         commands = sorted({CORE_OUTPUTS[name] for name in missing})
         st.error(
             "The console can't start because these outputs are missing: "
@@ -1631,7 +1630,7 @@ def main():
         )
         st.stop()
 
-    brand_header()
+    brand_header(pages, navigation)
     navigation.run()
 
 
