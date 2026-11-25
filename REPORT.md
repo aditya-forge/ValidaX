@@ -360,7 +360,8 @@ amount, and the two `card1` velocity features built in this project.
 ## 9. Deployment
 
 Run `streamlit run app/app.py` from the repository root. The app loads `app/model.pkl` and
-the files in `outputs/`, never writes to them, and has four pages:
+`artifacts/` and the files in `outputs/`, never writes to them, and has six pages. Two
+classify transactions (Section 9.1); four make up the investigation console:
 
 - **Fraud overview:** test-window metrics, a risk-ladder view of the tiers, and the
   global SHAP drivers from `feature_importance.csv` with family labels.
@@ -377,6 +378,43 @@ A banner on every page states the operating context: FinTech / CSE303 (F20), the
 $10 scenario costs and the 500 alerts/day capacity. Every page labels masked features by
 family only and never shows a masked column's value. Every score is presented as elevated
 risk that warrants review, not as a determination of fraud.
+
+### 9.1 Classifying new transactions
+
+The deployed app also classifies transactions that are not in the test window.
+
+**Batch classification (main model).** `src/inference.py` turns raw IEEE-CIS rows into the
+451 model features:
+
+- It reuses `src/features.py`.
+- It pins every categorical column to the training category list
+  (`artifacts/inference_metadata.json`), because XGBoost encodes categories by position.
+- It builds the `card1` velocity features from a per-card history summary
+  (`artifacts/card_history.csv`) plus earlier rows of the same upload.
+- Each row is then labelled **Fraudulent** at probability ≥ 0.24, otherwise **Legitimate**.
+- **Verification:** the first 20,000 test-window transactions were uploaded as raw rows (in
+  shuffled order), with history built from the training window only. All 451 rebuilt
+  features equalled the stored features, and the predictions matched with a maximum
+  difference of 0.0.
+
+**Classify a transaction (form model).** A person can't type in the 416 masked columns, so
+the single-transaction form uses a second XGBoost model trained on the 29 interpretable
+features only (`src/interpretable_model.py`, `artifacts/interpretable_model.pkl`).
+
+- **Protocol:** the same chronological split as the main model. The tree count (438) and
+  the cost-optimal threshold (**0.26**, $500 / $10 scenario) come from the validation slice
+  inside the training window.
+- **Results on the 118,108-transaction test window:**
+
+| Model | PR-AUC | ROC-AUC | Threshold | Precision | Recall | Scenario cost | Daily capture at 500/day |
+|---|---|---|---|---|---|---|---|
+| Main model (451 features, deployed) | 0.488 | 0.891 | 0.24 | 10.8% | 86.4% | $566,840 | 79.3% |
+| **Form model (29 interpretable features)** | **0.218** | **0.818** | **0.26** | **6.8%** | **84.4%** | **$786,990** | **64.2%** |
+| Logistic Regression baseline (interpretable) | 0.143 | 0.757 | — | — | — | — | — |
+
+The form model is clearly better than the interpretable logistic baseline, but much weaker
+than the full model. That is the price of excluding the masked columns, and the app says so
+on the form page. Its reason codes use documented features only.
 
 ## 10. Limitations
 
@@ -405,4 +443,5 @@ risk that warrants review, not as a determination of fraud.
    narrow the mean ± std estimates and test whether a broader search can beat the
    default parameters on validation.
 4. Possible extensions: client-level grouping beyond `card1`, rolling retraining with
-   drift monitoring, and an investigator feedback loop.
+   drift monitoring, an investigator feedback loop, and refreshing
+   `artifacts/card_history.csv` as new labeled transactions arrive.

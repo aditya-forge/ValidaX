@@ -1,6 +1,12 @@
 # ValidaX: Digital Payments Fraud & Identity Risk Investigation Engine
 
-**Python, SQL (DuckDB), scikit-learn, XGBoost, SHAP, Streamlit**
+**Python, SQL (DuckDB), scikit-learn, XGBoost, SHAP, Streamlit** · Live demo: https://validax.streamlit.app
+
+ValidaX is a machine learning system that detects fraudulent e-commerce transactions and
+classifies each one as **fraudulent or legitimate**, helping reduce financial losses and
+improve transaction security. Every prediction comes with a probability, a cost-optimal
+decision threshold and plain-language reasons, so investigators can review the riskiest
+transactions first.
 
 CSE303 Capstone Project (v2). Proposal: [PROPOSAL.md](PROPOSAL.md) · Final report: [REPORT.md](REPORT.md)
 
@@ -24,7 +30,8 @@ workload as the review threshold moves.**
 An end-to-end fraud analytics workflow: SQL-based exploratory analysis → interpretable +
 masked feature engineering → an XGBoost risk model benchmarked against a logistic
 regression baseline → threshold and cost-sensitive decisioning → SHAP-based reason codes
-→ a four-page Streamlit investigation console.
+→ a six-page Streamlit app that classifies single transactions (form) and uploaded batches
+(CSV) as fraudulent or legitimate, alongside the investigation console.
 
 ## Dataset
 
@@ -98,7 +105,7 @@ ValidaX/
 ├── .github/workflows/ci.yml           CI: lint, tests, Docker build + health check
 ├── .gitignore / .gitattributes / .editorconfig
 ├── app/
-│   ├── app.py                         4-page Streamlit investigation console
+│   ├── app.py                         6-page Streamlit app: classify, batch, investigate
 │   └── model.pkl                      trained bundle: XGBoost + logistic baseline +
 │                                      feature list + cost-optimal threshold
 ├── src/
@@ -106,7 +113,10 @@ ValidaX/
 │   ├── features.py                    interpretable + masked-family feature engineering
 │   ├── model.py                       chronological split, all models, tuning, clustering,
 │   │                                  threshold/cost/capacity analysis, SHAP
-│   └── scoring.py                     risk-scored table + SHAP reason codes
+│   ├── scoring.py                     risk-scored table + SHAP reason codes
+│   ├── inference.py                   new transactions -> model features (form + CSV upload)
+│   └── interpretable_model.py         trains the 29-feature form model
+├── artifacts/                         inference metadata, card history, form model (+ summary)
 ├── notebooks/
 │   ├── 01_eda.ipynb                   fraud rates, amount/time distributions, missingness
 │   ├── 02_preprocessing.ipynb         cleaning + interpretable/masked feature construction
@@ -191,11 +201,40 @@ last cell. It is off by default.
 SQL analysis, from the repository root: `duckdb -c ".read sql/fraud_analysis.sql"`
 (or run `sql/fraud_analysis.sql` from Python with `duckdb`).
 
+## Using the app
+
+**Live demo:** https://validax.streamlit.app
+
+| Page | What it does |
+|---|---|
+| **Classify a transaction** | Enter one transaction (amount, product, card network and type, email domains, device, relative time, billing codes, card history) and get **Fraudulent** or **Legitimate**, the fraud probability, the decision threshold and the top reasons. Uses the form model (29 interpretable fields), because the 416 masked Vesta columns can't be typed in. |
+| **Batch classification** | Upload a CSV in the IEEE-CIS format (the columns of Kaggle's `train/test_transaction.csv`, optionally with the identity file) and get every row labelled **Fraudulent** or **Legitimate** by the main 451-feature model, with risk tier and reason codes, plus a downloadable results file. If the file has an `isFraud` column, the page also scores itself against it. |
+| **Fraud overview** | Test-window metrics, the risk ladder, the classification at the deployed threshold, global SHAP drivers and the model benchmarks. |
+| **Alert queue** | Filterable triage list of scored test transactions, plus the K-means alert segments. |
+| **Transaction investigation** | One test-window transaction: score, decision, card history and SHAP reason codes. |
+| **Threshold simulator** | Fraudulent-vs-legitimate counts, precision/recall/F1, cost and alerts per day at any threshold. |
+
+**Try batch classification:** download `test_transaction.csv` (and optionally
+`test_identity.csv`) from the Kaggle competition, take the first few thousand rows, and
+upload them. These are real transactions from after the labeled window, so the card history
+used for them is point-in-time correct.
+
+**How a new transaction is prepared:** `src/inference.py` rebuilds exactly the training
+features. Checked on 20,000 test-window rows: the rebuilt features equal the stored ones
+and the predictions match to 0.0. It uses three files in `artifacts/`:
+
+- `inference_metadata.json`: the training category lists, so categorical encodings can't shift;
+- `card_history.csv`: a per-card summary, so "prior transactions" features work without the raw data;
+- `interpretable_model.pkl`: the form model.
+
+`make artifacts` rebuilds them from `data/processed/`.
+
 ## Deployment
 
-The console is a read-only Streamlit app. It reads `app/model.pkl`, the files in
-`outputs/` and, for live SHAP explanations on the Transaction investigation page,
-`data/processed/transactions_features.parquet`. It never writes to any of them.
+The app is read-only. It reads `app/model.pkl`, `artifacts/`, the files in `outputs/`
+and, for live SHAP explanations on the Transaction investigation page,
+`data/processed/transactions_features.parquet`. It never writes to any of them. Uploaded
+CSVs are processed in memory and never stored.
 
 ### Local
 
@@ -314,6 +353,7 @@ threshold are scenario assumptions, not industry figures.
 |---|---|---|
 | Logistic Regression (interpretable features only) | 0.757 | 0.143 |
 | **XGBoost** (interpretable + masked features, 451 total) | **0.891** | **0.488** |
+| XGBoost form model (29 interpretable features; Classify a transaction page) | 0.818 | 0.218 |
 
 PR-AUC is the metric that matters here, not accuracy: fraud is ~3.5% of test
 transactions, so a model that never alerts would score >96% accuracy while catching zero
