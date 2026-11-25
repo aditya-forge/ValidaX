@@ -2,7 +2,8 @@
 
 **Python | SQL (DuckDB) | scikit-learn | XGBoost | SHAP | Streamlit**
 
-Local Web Console: [http://localhost:8501](http://localhost:8501) (Start locally with `streamlit run app/app.py`)
+**Live Deployed Application:** [https://validax.streamlit.app](https://validax.streamlit.app)  
+*(Local development console: `streamlit run app/app.py` → [http://localhost:8501](http://localhost:8501))*
 
 ValidaX is a machine learning investigation engine built to detect and triage fraudulent card-not-present (CNP) e-commerce transactions. Instead of treating fraud detection as a naive 50/50 classification problem, ValidaX frames it as a risk-ranking and cost-optimization challenge: fraud accounts for only ~3.5% of total volume, while investigator review capacity is strictly constrained.
 
@@ -163,188 +164,49 @@ payments-fraud-investigation-main/
 
 ---
 
-## Interactive Web Console Walkthrough (Page Snippets)
+## Interactive Web Console Walkthrough
 
-The Streamlit investigation console runs locally at `http://localhost:8501`. It provides six dedicated pages tailored for fraud managers, triage analysts, and risk officers.
+The live web console is deployed at [https://validax.streamlit.app](https://validax.streamlit.app). It provides dedicated investigation workspaces tailored for fraud managers, triage analysts, and risk officers:
 
 ### Page 1: Fraud Overview (Executive Dashboard & Benchmarks)
-Surfaces executive-level operational KPIs, the model performance ladder, and global risk drivers.
+Surfaces executive-level operational KPIs, the model performance leaderboard across all evaluated architectures, and global risk drivers derived from TreeSHAP values.
 
-```
-========================================================================================
-ValidaX | Digital Payments Risk Console                           Operating Mode: Local
-Context: E-Commerce Fraud Triage | Model: XGBoost (451 Feat) | Decision Threshold: 0.24
-========================================================================================
-[ TEST PR-AUC ]        [ TEST ROC-AUC ]       [ OPTIMAL THRESHOLD ]     [ FRAUD CAPTURE ]
-    0.4881                 0.8911                    0.24                    79.3%
- (vs Base 0.143)        (vs Base 0.757)         (Min Cost $566.8k)       (@ 500 alerts/day)
-----------------------------------------------------------------------------------------
-Model Performance Benchmark Ladder (Chronological Test Holdout: 118,108 Rows)
-Rank  Model Name                              PR-AUC    ROC-AUC   Fit Time   Status
-#1    XGBoost Champion (451 features)         0.4862    0.8855    180.0 s    DEPLOYED
-#2    Feed-Forward ANN (MLP 128-64)           0.3949    0.8467     12.6 s    Candidate
-#3    Decision Tree (depth=8)                 0.3369    0.8248     13.8 s    Candidate
-#4    Logistic Regression (All Encoded)       0.2129    0.8356     30.5 s    Baseline
-#5    Linear SVM (Calibrated)                 0.2020    0.8272    803.5 s    Candidate
-#6    PCA (95% Var) + Logistic Reg            0.1671    0.8216      4.8 s    Candidate
-#7    Logistic Regression (Interpretable)     0.1428    0.7577      1.2 s    Reference
-#8    Gaussian Naive Bayes                    0.0869    0.7620      0.8 s    Rejected
-----------------------------------------------------------------------------------------
-Top 5 Global Risk Drivers (TreeSHAP Mean |Value|)
-1. Purchaser Email Domain (P_emaildomain)       | [████████████████████] 0.181
-2. Masked Counting Metric (C14)                | [███████████████████ ] 0.179
-3. Masked Counting Metric (C13)                | [██████████████████  ] 0.177
-4. Card Type (card6: credit vs. debit)         | [█████████████████   ] 0.173
-5. Transaction Amount (TransactionAmt)         | [████████████████    ] 0.166
-========================================================================================
-```
+![Overview Dashboard](docs/screenshots/01_overview.png)
 
 ---
 
 ### Page 2: Classify Single Transaction (Live Form Model)
-Allows manual entry of transaction attributes for on-demand risk scoring. Because an investigator cannot manually type in 416 masked columns, this page uses the dedicated 29-feature form model.
+Allows manual entry of transaction attributes for on-demand risk scoring. Because an investigator cannot manually type in 416 masked columns, this interface leverages a dedicated 29-feature interpretable model that scores claims in real time.
 
-```
-========================================================================================
-Classify Transaction | On-Demand Risk Assessment (Form Model)
-========================================================================================
-[ Transaction Details Input Form ]
-Transaction Amount ($) : [ 420.50     ]   Product Code       : [ W (Web)          ]
-Card Network           : [ visa       ]   Card Type          : [ credit           ]
-Purchaser Email Domain : [ protonmail.com ]   Recipient Domain   : [ anonymous.com    ]
-Billing Region (addr1) : [ 299        ]   Distance Metric    : [ 128 miles        ]
-Device Type            : [ mobile     ]   Card History Count : [ 0 (First Seen)   ]
-----------------------------------------------------------------------------------------
-[ PREDICT FRAUD RISK ] (Click)
-----------------------------------------------------------------------------------------
->>> DECISION RESULT: [ FLAG FOR INVESTIGATION - HIGH RISK ] <<<
-Estimated Fraud Probability : 0.684  (Decision Threshold: 0.260)
-Risk Tier                   : HIGH RISK (Tier 2 / 4)
-
-Top SHAP Reason Codes Explaining This Risk:
-(+) Purchaser uses high-risk webmail domain (protonmail.com)        [+0.24 risk impact]
-(+) First transaction seen on this card code (zero past velocity)    [+0.19 risk impact]
-(+) Transaction amount ($420.50) is 3.1x typical category average    [+0.14 risk impact]
-(-) Transaction initiated during standard business daytime hours     [-0.04 risk impact]
-========================================================================================
-```
+![Classify Single Transaction](docs/screenshots/02_classify_single.png)
 
 ---
 
 ### Page 3: Batch Classification (CSV Upload)
-Processes raw CSV uploads matching the IEEE-CIS schema and scores them using the full 451-feature XGBoost champion model.
+Processes raw CSV uploads matching the IEEE-CIS schema and scores them using the full 451-feature XGBoost champion model, providing automated triage decisions and downloadable flagged queues.
 
-```
-========================================================================================
-Batch Classification Engine | Full 451-Feature Model
-========================================================================================
-Upload Transaction Batch CSV: [ Drag and drop test_transactions.csv (Max 100k rows) ]
-[ Upload Status: 15,000 transactions loaded successfully ]
-----------------------------------------------------------------------------------------
-Batch Processing Summary:
-Total Processed : 15,000       Flagged for Review (Score >= 0.24) : 4,112 (27.4%)
-Auto-Approved   : 10,888       Critical Tier (Score >= 0.80)      :   392  (2.6%)
-
-Scored Output Preview:
-Txn ID   Amount   Card Type  Domain          Score   Tier      Decision       Top Reason
-----------------------------------------------------------------------------------------
-3692014  $780.00  credit     gmail.com       0.892   Critical  FLAG REVIEW    C14 velocity spike
-3692015  $ 34.20  debit      yahoo.com       0.041   Low       AUTO APPROVE   Domestic debit card
-3692016  $152.00  credit     protonmail.com  0.641   High      FLAG REVIEW    Email domain mismatch
-3692017  $ 89.95  debit      hotmail.com     0.118   Low       AUTO APPROVE   Consistent card history
-3692018  $950.00  credit     mail.com        0.785   High      FLAG REVIEW    Large amount outlier
-----------------------------------------------------------------------------------------
-[ Download Full Scored Batch CSV with SHAP Reason Codes ] (Export Button)
-========================================================================================
-```
+![Batch Classification](docs/screenshots/02b_classify_batch.png)
 
 ---
 
 ### Page 4: Alert Queue & Operational Triage
-Displays prioritized transactions for fraud analysts, segmented by operational risk tiers and K-means alert clusters.
+Displays prioritized transactions for fraud analysts, segmented by operational risk tiers (Critical, High, Medium, Low) and daily investigator review bandwidth.
 
-```
-========================================================================================
-Analyst Alert Queue | Prioritized Triage Worklist
-========================================================================================
-Queue Filters: [x] Critical (>=0.8)  [x] High (0.6-0.8)  [ ] Medium (0.3-0.6)  [ ] Low (<0.3)
-Min Amount: [$100   ]   Card Network: [ All ]   Total Filtered Alerts: 7,545 items
-
-Priority  Txn ID   Amount   Card Code  Score   Risk Tier  Status       Primary Reason Driver
-----------------------------------------------------------------------------------------
-#0001     3488219  $985.00  card1_7919 0.942   Critical   OPEN QUEUE   V258 masked spike (+0.31)
-#0002     3491002  $650.00  card1_1204 0.915   Critical   OPEN QUEUE   P_emaildomain high-risk
-#0003     3500124  $420.00  card1_9500 0.884   Critical   OPEN QUEUE   Velocity count C13 (+0.22)
-#0004     3512890  $310.00  card1_2803 0.812   Critical   OPEN QUEUE   First-seen card ratio
-----------------------------------------------------------------------------------------
-K-Means Operational Alert Clusters (30,621 alerts at threshold 0.26):
-Cluster ID   Alert Count   Fraud Rate   Typical Amount   Recommended Handling Lane
-Lane 1       3,219 (10.5%) 28.1%        $ 43.00          Immediate Review (Mobile + Identity)
-Lane 2         184 ( 0.6%) 20.1%        $113.00          New Account Verification (Zero History)
-Lane 3       5,316 (17.4%) 10.6%        $ 90.00          Nighttime Off-Peak Watchlist
-Lane 4      21,902 (71.5%)  8.8%        $112.00          Standard Triage Volume
-========================================================================================
-```
+![Alert Queue](docs/screenshots/03_alert_queue.png)
 
 ---
 
-### Page 5: Transaction Investigation & SHAP Waterfall
-Enables an analyst to conduct a deep-dive forensic audit on any single transaction ID.
+### Page 5: Transaction Investigation & SHAP Risk Drivers
+Enables an analyst to conduct a forensic deep-dive on any transaction in the test window, displaying transaction parameters, card history velocity, and TreeSHAP risk factors explaining why the event was flagged.
 
-```
-========================================================================================
-Transaction Forensic Audit | ID: #3488219
-========================================================================================
-Base Profile:
-Transaction Time : Day 152, 03:14:20 (Night)   Transaction Amount : $985.00
-Card Identity    : Visa Credit (card1: 7919)   Email Pair         : protonmail -> anonymous
-Device / OS      : iOS Mobile (id_31: safari)  Billing Region     : Region 299 (Domestic)
-
-Card Historical Context (Point-in-Time):
-Prior Transactions Count : 12 txns             Average Past Amount : $64.20
-Largest Past Amount      : $115.00             Time Since Last Txn : 42 seconds (Velocity Alert)
-
-Local TreeSHAP Waterfall Risk Breakdown:
-Base Model Intercept (Average Log-Odds Risk) = -3.32 (3.5% baseline)
-(+) masked Vesta feature (V258) = 3.84         ------------------> [+1.42 log-odds]
-(+) time since last card txn = 42s (rapid)     ------------>       [+0.98 log-odds]
-(+) current amount ($985) is 15.3x card avg    --------->          [+0.85 log-odds]
-(+) purchaser domain is privacy webmail        ------>             [+0.52 log-odds]
-(-) domestic card matching billing address     <----               [-0.31 log-odds]
-----------------------------------------------------------------------------------------
-Final Calibrated Probability : 0.942 | Risk Tier : CRITICAL | Decision: FLAG & HOLD
-========================================================================================
-```
+![Transaction Investigation](docs/screenshots/04_investigate.png)
 
 ---
 
 ### Page 6: Threshold Simulator & Cost Optimization
-Visualizes the economic and operational trade-offs of shifting the alert decision threshold.
+Visualizes the economic and operational trade-offs of shifting the alert decision threshold, plotting expected financial losses against analyst review volume to identify the cost-optimal cutoff ($500 missed fraud vs. $10 false alarm).
 
-```
-========================================================================================
-Threshold & Economic Cost Simulator
-========================================================================================
-Interactive Decision Threshold Slider: [ ====O============= ] Threshold = 0.24
-
-Performance at Selected Threshold (0.24):
-Total Alerts Generated : 32,545 items (27.6% of traffic)
-Precision              : 10.8% (1 in 9 alerts is confirmed fraud)
-Fraud Recall           : 86.4% (Catches 3,511 out of 4,064 test frauds)
-Missed Frauds (FN)     :   553 frauds missed ($500 cost each = $276,500)
-False Alarms (FP)      : 29,034 unnecessary reviews ($10 cost each = $290,340)
-Total Operational Cost : $566,840
-
-Comparison Against Default Threshold (0.50):
-Metric                  Default Threshold (0.50)    Cost-Optimal (0.24)    Improvement
-----------------------------------------------------------------------------------------
-Alert Volume            11,106                      32,545                 +21,439 reviews
-Fraud Recall            68.1%                       86.4%                  +18.3% caught
-Missed Frauds           1,297                       553                    744 fewer missed
-False Alarms             8,339                      29,034                 +20,695 reviews
-Total Cost ($500/$10)   $731,890                    $566,840               -$165,050 (SAVED)
-========================================================================================
-```
+![Threshold Simulator](docs/screenshots/05_simulator.png)
 
 ---
 

@@ -22,6 +22,7 @@ env/
 
 # Streamlit
 .streamlit/secrets.toml
+.streamlit/credentials.toml
 
 # Editors / OS
 .vscode/
