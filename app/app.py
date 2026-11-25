@@ -36,11 +36,13 @@ import streamlit as st
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
+import inference as inf  # noqa: E402
 from model import (  # noqa: E402
     DAILY_REVIEW_CAPACITY,
     FALSE_NEGATIVE_COST,
     FALSE_POSITIVE_COST,
     chronological_split,
+    risk_tier,
 )
 from scoring import FEATURE_LABELS, is_masked_column, label_for_feature, reason_text  # noqa: E402
 
@@ -48,6 +50,9 @@ OUTPUTS_DIR = ROOT / "outputs"
 SHAP_SUMMARY_PATH = OUTPUTS_DIR / "shap_summary.png"
 MODEL_PATH = Path(__file__).resolve().parent / "model.pkl"
 FEATURES_PATH = ROOT / "data" / "processed" / "transactions_features.parquet"
+FORM_MODEL_PATH = inf.ARTIFACTS_DIR / "interpretable_model.pkl"
+MAX_BATCH_ROWS = 100_000      # protects memory on small hosts (e.g. Streamlit Community Cloud)
+BATCH_REASON_ROWS = 300       # SHAP reason codes for the highest-scored fraudulent rows
 
 # Core artifacts from src/model.py + src/scoring.py: the console needs all of them.
 CORE_OUTPUTS = {
@@ -65,7 +70,8 @@ OPTIONAL_OUTPUTS = {
     "alert_clusters.csv": "notebooks/05_tuning_and_benchmark.ipynb",
 }
 
-PAGES = ["Fraud overview", "Alert queue", "Transaction investigation", "Threshold simulator"]
+PAGES = ["Classify a transaction", "Batch classification", "Fraud overview", "Alert queue",
+         "Transaction investigation", "Threshold simulator"]
 TIERS = ["Critical", "High", "Medium", "Low"]
 
 st.set_page_config(page_title="Fraud risk operations console", layout="wide")
@@ -461,8 +467,37 @@ def load_test_features(feature_cols: tuple) -> pd.DataFrame:
 
 
 @st.cache_resource
-def get_explainer(_model):
+def get_explainer(_model, key: str):
+    """TreeExplainer per model. `_model` is not hashed by Streamlit, so `key` keeps the cache per model."""
     return shap.TreeExplainer(_model)
+
+
+@st.cache_resource
+def load_form_model():
+    return joblib.load(FORM_MODEL_PATH)
+
+
+@st.cache_resource
+def load_inference_assets():
+    """(metadata, card history) for preparing new transactions."""
+    return inf.load_metadata(), inf.load_card_history()
+
+
+def inference_assets_missing() -> list:
+    return [str(p.relative_to(ROOT)) for p in (inf.METADATA_PATH, inf.CARD_HISTORY_PATH) if not p.is_file()]
+
+
+def get_main_bundle():
+    """The deployed bundle, or None after showing a clear error."""
+    if not MODEL_PATH.is_file():
+        st.error(f"`app/{MODEL_PATH.name}` is missing. Rebuild it with `python src/model.py`.")
+        return None
+    try:
+        return load_model_bundle()
+    except Exception as exc:  # incompatible pickle or corrupt file
+        st.error(f"`app/{MODEL_PATH.name}` could not be loaded ({type(exc).__name__}: {exc}). "
+                 "Rebuild it with `python src/model.py` in the current environment.")
+        return None
 
 
 # ------------------------------------------------------------- analytics --
@@ -765,7 +800,7 @@ def page_investigation(scored: pd.DataFrame, bundle: dict):
 
         model, feature_cols = bundle["xgb_model"], bundle["feature_cols"]
         x_row = test_features.loc[[txn_id], feature_cols]
-        values = get_explainer(model)(x_row).values[0]
+        values = get_explainer(model, "main")(x_row).values[0]
         feature_row = x_row.iloc[0]
 
         contrib = (pd.DataFrame({"feature": feature_cols, "shap_value": values})
@@ -870,6 +905,260 @@ def page_threshold_simulator(scored: pd.DataFrame, summary: dict):
     )
 
 
+# --------------------------------------------------------- classification --
+def verdict_banner(label: str, probability: float, threshold: float) -> None:
+    fraud = label == inf.FRAUDULENT
+    color = RISK_COLORS["Critical"] if fraud else DATA
+    meaning = ("flag for review: elevated risk, not a final determination of fraud" if fraud
+               else "below the review threshold: no alert")
+    st.html(
+        f'<div style="border:1px solid {RULE};border-left:4px solid {color};border-radius:2px;'
+        f'padding:0.8rem 1rem;margin:0.4rem 0 0.8rem 0;">'
+        f'<div style="font-size:0.8rem;color:{MUTED};">Prediction</div>'
+        f'<div style="font-size:1.6rem;font-weight:600;color:{color};">{html_safe(label)}</div>'
+        f'<div style="font-size:0.88rem;color:{INK};">Fraud probability {probability:.4f} vs. threshold '
+        f'{threshold:.2f}, {html_safe(meaning)}.</div></div>'
+    )
+
+
+def explain_rows(model, key: str, X: pd.DataFrame, top_n: int):
+    """Top-|SHAP| (feature, value) pairs per row, highest first."""
+    values = get_explainer(model, key)(X).values
+    order = (-abs(values)).argsort(axis=1)[:, :top_n]
+    return [[(X.columns[j], float(row[j])) for j in idx] for row, idx in zip(values, order, strict=True)]
+
+
+def page_classify_transaction(main_summary: dict):
+    st.title("Classify a transaction")
+    st.caption("Enter one e-commerce transaction to classify it as fraudulent or legitimate. Time is a "
+               "position in the dataset's relative cycle (TransactionDT is an offset, not a date).")
+
+    missing = inference_assets_missing()
+    if not FORM_MODEL_PATH.is_file():
+        missing.append(str(FORM_MODEL_PATH.relative_to(ROOT)))
+    if missing:
+        st.error("This page needs " + ", ".join(f"`{p}`" for p in missing) + ". Build them with "
+                 "`python src/inference.py` and `python src/interpretable_model.py`.")
+        return
+    bundle = load_form_model()
+    meta, _ = load_inference_assets()
+    cats = meta["categories"]
+
+    def pick(options, preferred):
+        return options.index(preferred) if preferred in options else 0
+
+    with st.form("classify_transaction"):
+        st.markdown("**Payment**")
+        c1, c2, c3, c4 = st.columns(4)
+        amount = c1.number_input("Amount (\\$)", min_value=0.01, value=117.00, step=1.0, format="%.2f")
+        product = c2.selectbox("Product code", cats["ProductCD"], index=pick(cats["ProductCD"], "W"))
+        card4 = c3.selectbox("Card network", cats["card4"], index=pick(cats["card4"], "visa"))
+        card6 = c4.selectbox("Card type", cats["card6"], index=pick(cats["card6"], "debit"))
+
+        st.markdown("**Customer, device and time**")
+        c1, c2, c3, c4, c5 = st.columns(5)
+        none = "(not provided)"
+        p_email = c1.selectbox("Purchaser email domain", [none, *cats["P_emaildomain"]],
+                               index=pick([none, *cats["P_emaildomain"]], "gmail.com"))
+        r_email = c2.selectbox("Recipient email domain", [none, *cats["R_emaildomain"]])
+        device = c3.selectbox("Device type", ["(unknown)", *cats["DeviceType"]])
+        hour = c4.number_input("Hour of relative cycle (0-23)", min_value=0, max_value=23, value=14)
+        dow = c5.number_input("Day of relative 7-day cycle (0-6)", min_value=0, max_value=6, value=2)
+
+        st.markdown("**Card history** (card1 key)")
+        first_seen = st.checkbox("First transaction seen for this card (history below is ignored)")
+        c1, c2, c3, c4 = st.columns(4)
+        prior = c1.number_input("Earlier transactions", min_value=0, value=12, step=1)
+        avg_prior = c2.number_input("Average past amount (\\$)", min_value=0.0, value=95.0, step=1.0)
+        max_prior = c3.number_input("Largest past amount (\\$)", min_value=0.0, value=300.0, step=1.0)
+        gap_hours = c4.number_input("Hours since last transaction", min_value=0.0, value=30.0, step=1.0)
+
+        defaults = meta.get("form_defaults", {})
+        st.markdown("**Billing address and distance codes**")
+        c1, c2, c3, c4 = st.columns(4)
+        addr1 = c1.number_input("addr1 (billing region code)", value=defaults.get("addr1"), step=1.0)
+        addr2 = c2.number_input("addr2 (billing country code)", value=defaults.get("addr2"), step=1.0)
+        dist1 = c3.number_input("dist1 (distance, optional)", value=None, step=1.0)
+        dist2 = c4.number_input("dist2 (distance, optional)", value=None, step=1.0)
+        st.caption("Address codes are prefilled with the most common values in the data. Clear them only if the "
+                   "address is really unknown: a missing billing address is itself a strong fraud signal "
+                   "(11.8% fraud vs. 2.5% when present). Distances are usually missing and can stay empty.")
+        submitted = st.form_submit_button("Classify transaction", type="primary")
+
+    if not submitted:
+        st.info("Fill in the transaction and select **Classify transaction**.")
+        return
+
+    inputs = {
+        "TransactionAmt": amount, "ProductCD": product, "card4": card4, "card6": card6,
+        "P_emaildomain": None if p_email == none else p_email,
+        "R_emaildomain": None if r_email == none else r_email,
+        "DeviceType": None if device == "(unknown)" else device,
+        "addr1": addr1, "addr2": addr2, "dist1": dist1, "dist2": dist2,
+        "transaction_hour": hour, "transaction_dow": dow,
+        "card_prior_txn_count": 0 if first_seen else prior,
+        "card_avg_amount_prior": avg_prior, "card_max_amount_prior": max_prior,
+        "seconds_since_card_last_txn": None if first_seen else gap_hours * 3600,
+    }
+    X = inf.prepare_single(inputs, meta, bundle["feature_cols"])
+    probability = float(bundle["xgb_model"].predict_proba(X)[:, 1][0])
+    threshold = float(bundle["threshold"])
+    label = str(inf.classify([probability], threshold)[0])
+    verdict_banner(label, probability, threshold)
+
+    contributions = explain_rows(bundle["xgb_model"], "form", X, top_n=8)[0]
+    row = X.iloc[0]
+    is_first = bool(row["card_is_first_seen"] == 1)
+    chart = pd.DataFrame({"label": [display_label(f) for f, _ in contributions],
+                          "shap_value": [v for _, v in contributions]}).iloc[::-1]
+    fig = go.Figure(go.Bar(
+        x=chart["shap_value"], y=chart["label"], orientation="h",
+        marker_color=[INCREASES_RISK if v > 0 else DECREASES_RISK for v in chart["shap_value"]],
+        hovertemplate="%{y}: %{x:+.3f}<extra></extra>",
+    ))
+    left, right = st.columns([3, 2])
+    left.plotly_chart(styled(fig, "What drove this prediction (red raises risk, blue lowers it)",
+                             height=360, xaxis_title="SHAP value"), width="stretch")
+    with right:
+        st.markdown("**Top reasons**")
+        items = "".join(
+            f'<li class="{"up" if v > 0 else "down"}">{html_safe(investigation_reason(f, v, row[f], is_first))}</li>'
+            for f, v in contributions[:5]
+        )
+        st.html(f'<ol class="reasons">{items}</ol>')
+
+    s = bundle["summary"]["test"]
+    main_pr = main_summary["xgboost"]["pr_auc"]
+    st.caption(md_safe(
+        f"Form model: XGBoost on {bundle['summary']['features']} interpretable fields (no masked columns can be "
+        f"typed in). On the 118,108-transaction test window it reaches PR-AUC {s['pr_auc']:.3f} / ROC-AUC "
+        f"{s['roc_auc']:.3f}, and at threshold {threshold:.2f} catches {s['at_threshold']['recall']:.1%} of fraud "
+        f"at {s['at_threshold']['precision']:.1%} precision. The full 451-feature model (PR-AUC {main_pr:.3f}) is "
+        "more accurate; use Batch classification for rows in the IEEE-CIS format. Threshold chosen for the "
+        f"${FALSE_NEGATIVE_COST:,} missed-fraud / ${FALSE_POSITIVE_COST:,} false-positive scenario."
+    ))
+
+
+def page_batch_classification(bundle: dict):
+    st.title("Batch classification")
+    threshold = float(bundle["cost_optimal_threshold"])
+    st.caption(md_safe(
+        "Upload transactions in the IEEE-CIS format (the columns of Kaggle's train/test_transaction.csv, "
+        f"optionally with the identity file) to classify every row as fraudulent or legitimate with the main "
+        f"451-feature model at threshold {threshold:.2f} (cost-optimal for ${FALSE_NEGATIVE_COST:,} missed fraud "
+        f"/ ${FALSE_POSITIVE_COST:,} false positive). Files are processed in memory and never stored."
+    ))
+    missing = inference_assets_missing()
+    if missing:
+        st.error("This page needs " + ", ".join(f"`{p}`" for p in missing) + ". Build them with "
+                 "`python src/inference.py`.")
+        return
+    meta, history = load_inference_assets()
+
+    template = ",".join(["TransactionID", "TransactionDT", "TransactionAmt", "card1",
+                         *[c for c in meta["raw_columns"] if c not in inf.REQUIRED_BATCH_COLUMNS]]) + "\n"
+    c1, c2 = st.columns(2)
+    tx_file = c1.file_uploader("Transactions CSV (required)", type="csv")
+    id_file = c2.file_uploader("Identity CSV (optional, merged on TransactionID)", type="csv")
+    st.download_button("Download a blank column template", template, "validax_template.csv", "text/csv")
+    st.caption(f"Required columns: {', '.join(inf.REQUIRED_BATCH_COLUMNS)}. Any other IEEE-CIS column that is "
+               f"missing is treated as missing data. Up to {MAX_BATCH_ROWS:,} rows per upload. If an `isFraud` "
+               "column is included, the page also scores the predictions against it.")
+    if tx_file is None:
+        st.info("Upload a transactions CSV to classify it.")
+        return
+
+    try:
+        raw = inf.read_batch_csv(tx_file, meta)
+        if len(raw) > MAX_BATCH_ROWS:
+            st.error(f"The file has {len(raw):,} rows; the limit is {MAX_BATCH_ROWS:,}. Split it and upload in parts.")
+            return
+        if id_file is not None:
+            identity = inf.read_batch_csv(id_file, meta)
+            if "TransactionID" not in identity or identity["TransactionID"].duplicated().any():
+                st.error("The identity file needs a unique TransactionID column.")
+                return
+            overlap = [c for c in identity.columns if c in raw.columns and c != "TransactionID"]
+            raw = raw.merge(identity.drop(columns=overlap), on="TransactionID", how="left")
+        X = inf.prepare_batch(raw, meta, history, list(bundle["feature_cols"]))
+    except ValueError as exc:
+        st.error(f"Couldn't read the upload: {exc}")
+        return
+    except Exception as exc:  # malformed CSV, wrong encoding, ...
+        st.error(f"Couldn't read the upload ({type(exc).__name__}). Check that it is a comma-separated "
+                 f"IEEE-CIS file: {exc}")
+        return
+
+    model = bundle["xgb_model"]
+    proba = model.predict_proba(X)[:, 1]
+    labels = inf.classify(proba, threshold)
+    raw_by_id = raw.set_index("TransactionID").loc[X.index]
+    results = pd.DataFrame({
+        "TransactionID": X.index.to_numpy(),
+        "fraud_probability": proba,
+        "prediction": labels,
+        "risk_tier": [risk_tier(p) for p in proba],
+        "TransactionAmt": raw_by_id["TransactionAmt"].to_numpy(),
+        "ProductCD": raw_by_id["ProductCD"].to_numpy() if "ProductCD" in raw_by_id else None,
+        "card4": raw_by_id["card4"].to_numpy() if "card4" in raw_by_id else None,
+        "card6": raw_by_id["card6"].to_numpy() if "card6" in raw_by_id else None,
+    })
+
+    in_window = float((raw_by_id["TransactionDT"] <= meta["history_end_dt"]).mean())
+    if in_window > 0:
+        st.warning(f"{in_window:.0%} of rows fall inside the labeled IEEE-CIS time window (TransactionDT ≤ "
+                   f"{meta['history_end_dt']:,}). Their card-history features include later transactions from "
+                   "that window, so treat those predictions as indicative only. Rows after the window "
+                   "(e.g. Kaggle's test files) are scored point-in-time correctly.")
+
+    fraud_mask = results["prediction"] == inf.FRAUDULENT
+    cols = st.columns(4)
+    cols[0].metric("Rows classified", f"{len(results):,}")
+    cols[1].metric("Fraudulent", f"{int(fraud_mask.sum()):,}  ({fraud_mask.mean():.1%})")
+    cols[2].metric("Legitimate", f"{int((~fraud_mask).sum()):,}")
+    cols[3].metric("Amount in fraudulent rows", f"${results.loc[fraud_mask, 'TransactionAmt'].sum():,.0f}")
+
+    if "isFraud" in raw_by_id and raw_by_id["isFraud"].notna().all():
+        truth = raw_by_id["isFraud"].astype(int).to_numpy()
+        m = cost_at_threshold(pd.DataFrame({"fraud_probability": proba, "isFraud": truth}), threshold)
+        st.markdown(md_safe(
+            f"**Against the uploaded `isFraud` labels:** precision {m['precision']:.1%}, recall {m['recall']:.1%}, "
+            f"F1 {m['f1']:.3f}, scenario cost ${m['estimated_cost']:,.0f}."
+        ))
+        st.dataframe(classification_table(m), hide_index=True, width="stretch")
+
+    # SHAP reason codes for the highest-scored fraudulent rows.
+    for i in (1, 2, 3):
+        results[f"top_reason_{i}"] = ""
+    flagged = results[fraud_mask].nlargest(BATCH_REASON_ROWS, "fraud_probability")
+    if len(flagged):
+        X_flagged = X.loc[flagged["TransactionID"].to_numpy()]
+        for row_pos, contributions in zip(flagged.index, explain_rows(model, "main", X_flagged, top_n=3), strict=True):
+            feature_row = X.loc[results.at[row_pos, "TransactionID"]]
+            first = bool(feature_row["card_is_first_seen"] == 1)
+            for i, (f, v) in enumerate(contributions, 1):
+                results.at[row_pos, f"top_reason_{i}"] = investigation_reason(f, v, feature_row[f], first)
+
+    shown = results.sort_values("fraud_probability", ascending=False)
+    st.dataframe(
+        shown, hide_index=True, width="stretch", height=480,
+        column_config={
+            "TransactionID": st.column_config.NumberColumn("Transaction ID", format="%d"),
+            "fraud_probability": st.column_config.NumberColumn("Fraud probability", format="%.4f"),
+            "prediction": "Prediction",
+            "risk_tier": "Tier",
+            "TransactionAmt": st.column_config.NumberColumn("Amount", format="$%.2f"),
+            "ProductCD": "Product", "card4": "Card network", "card6": "Card type",
+            "top_reason_1": st.column_config.TextColumn("Top reason", width="large"),
+            "top_reason_2": "Reason 2", "top_reason_3": "Reason 3",
+        },
+    )
+    st.caption(f"Reason codes are computed for the {min(len(flagged), BATCH_REASON_ROWS):,} highest-scored "
+               "fraudulent rows; masked columns show family labels only. \"Fraudulent\" means the row warrants "
+               "investigator review; it is not a final determination of fraud.")
+    st.download_button("Download results (CSV)", shown.to_csv(index=False), "validax_predictions.csv", "text/csv")
+
+
 # --------------------------------------------------------------------- main --
 def main():
     st.html(STYLE)
@@ -895,21 +1184,20 @@ def main():
 
     scored, summary = load_scored(), load_summary()
 
-    if page == "Fraud overview":
+    if page == "Classify a transaction":
+        page_classify_transaction(summary)
+    elif page == "Batch classification":
+        bundle = get_main_bundle()
+        if bundle is not None:
+            page_batch_classification(bundle)
+    elif page == "Fraud overview":
         page_overview(scored, summary)
     elif page == "Alert queue":
         page_alert_queue(scored)
     elif page == "Transaction investigation":
-        if not MODEL_PATH.is_file():
-            st.error(f"`app/{MODEL_PATH.name}` is missing. Rebuild it with `python src/model.py`.")
-            return
-        try:
-            bundle = load_model_bundle()
-        except Exception as exc:  # incompatible pickle or corrupt file
-            st.error(f"`app/{MODEL_PATH.name}` could not be loaded ({type(exc).__name__}: {exc}). "
-                     "Rebuild it with `python src/model.py` in the current environment.")
-            return
-        page_investigation(scored, bundle)
+        bundle = get_main_bundle()
+        if bundle is not None:
+            page_investigation(scored, bundle)
     else:
         page_threshold_simulator(scored, summary)
 
