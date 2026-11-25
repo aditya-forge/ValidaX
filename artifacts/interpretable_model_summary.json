@@ -1,0 +1,40 @@
+{
+  "model": "XGBoost, interpretable features only",
+  "features": 29,
+  "train_rows": 472432,
+  "test_rows": 118108,
+  "n_estimators": 438,
+  "threshold": 0.26,
+  "threshold_source": "cost-optimal on the chronological validation slice ($500 FN / $10 FP)",
+  "validation_pr_auc": 0.23413235823107992,
+  "test": {
+    "roc_auc": 0.8181809106106857,
+    "pr_auc": 0.2184084038685541,
+    "at_threshold": {
+      "threshold": 0.26,
+      "alerts": 50429,
+      "precision": 0.06801641912391679,
+      "recall": 0.843996062992126,
+      "f1": 0.12588772869909898,
+      "true_positives": 3430,
+      "false_positives": 46999,
+      "false_negatives": 634,
+      "true_negatives": 67045,
+      "total_cost": 786990
+    },
+    "at_0.5": {
+      "threshold": 0.5,
+      "alerts": 17727,
+      "precision": 0.1365713318666441,
+      "recall": 0.5957185039370079,
+      "f1": 0.22220182644210912,
+      "true_positives": 2421,
+      "false_positives": 15306,
+      "false_negatives": 1643,
+      "true_negatives": 98738,
+      "total_cost": 974560
+    },
+    "avg_daily_recall_at_500": 0.6419851323543133,
+    "avg_daily_precision_at_500": 0.12452380952380951
+  }
+}
