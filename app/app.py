@@ -71,19 +71,13 @@ OPTIONAL_OUTPUTS = {
     "alert_clusters.csv": "notebooks/05_tuning_and_benchmark.ipynb",
 }
 
-LANDING = "ValidaX Landing"
-PAGES = [LANDING, "Classify a transaction", "Batch classification", "Fraud overview", "Alert queue",
-         "Transaction investigation", "Threshold simulator"]
-PAGE_SLUGS = {LANDING: "home", "Classify a transaction": "classify", "Batch classification": "batch",
-              "Fraud overview": "overview", "Alert queue": "queue",
-              "Transaction investigation": "investigate", "Threshold simulator": "threshold"}
 TIERS = ["Critical", "High", "Medium", "Low"]
 
-st.set_page_config(page_title="ValidaX | Autonomous Transaction Validation", page_icon="🛡️", layout="wide")
+st.set_page_config(page_title="ValidaX | Autonomous Payment Validation Engine", layout="wide")
 
 # ---------------------------------------------------------------- design --
-# Dark design system (also set in .streamlit/config.toml so native widgets,
-# menus and data tables render dark): canvas, card, border, text, muted, accent.
+# Flat, rectangular system UI: one canvas, one card surface, 1px rules, 4px corners.
+# The same tokens drive .streamlit/config.toml so native widgets and tables match.
 CANVAS = "#0E1117"
 CARD = "#161B22"
 RULE = "#30363D"
@@ -94,120 +88,121 @@ ACCENT = "#238636"
 POSITIVE = "#3FB950"
 DATA = "#58A6FF"
 PANEL = CARD
+RADIUS = "4px"
 RISK_COLORS = {"Critical": "#F85149", "High": "#DB6D28", "Medium": "#D29922", "Low": "#6E7681"}
 INCREASES_RISK, DECREASES_RISK = RISK_COLORS["Critical"], DATA
 FONT_STACK = "'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif"
+MONO_STACK = "'IBM Plex Mono', ui-monospace, SFMono-Regular, Consolas, monospace"
 
+# Geometric mark: a square frame with a check cut through it. Embedded as an image
+# because st.html sanitises inline <svg>.
 _LOGO_MARKUP = (
-    f'<svg xmlns="http://www.w3.org/2000/svg" width="30" height="30" viewBox="0 0 24 24" fill="none">'
-    f'<path d="M12 2.5 4 5.6v6.1c0 4.9 3.4 8.9 8 9.8 4.6-.9 8-4.9 8-9.8V5.6l-8-3.1Z" '
-    f'fill="{ACCENT}" stroke="{POSITIVE}" stroke-width="1.2"/>'
-    f'<path d="m8.4 12.2 2.5 2.5 4.9-5" stroke="{INK}" stroke-width="2" stroke-linecap="round" '
-    f'stroke-linejoin="round"/></svg>'
+    '<svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 28 28" fill="none">'
+    f'<rect x="1" y="1" width="26" height="26" rx="3" fill="{CARD}" stroke="{INK}" stroke-width="2"/>'
+    f'<path d="M7 14.5l4.5 4.5L21 9" stroke="{POSITIVE}" stroke-width="3" stroke-linecap="square"/>'
+    '</svg>'
 )
-# st.html sanitises inline <svg>, so the mark is embedded as an image.
-LOGO_SVG = ('<img alt="ValidaX" width="30" height="30" src="data:image/svg+xml;base64,'
+LOGO_SVG = ('<img alt="ValidaX" width="28" height="28" src="data:image/svg+xml;base64,'
             + base64.b64encode(_LOGO_MARKUP.encode()).decode() + '">')
 
 STYLE = f"""
 <style>
-@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap');
 .stApp {{ font-family: {FONT_STACK}; background: {CANVAS}; color: {INK}; font-variant-numeric: tabular-nums; }}
-.block-container {{ padding-top: 4.4rem; max-width: 1440px; }}
-h1 {{ font-size: 1.6rem !important; font-weight: 600 !important; letter-spacing: -0.015em; color: {INK} !important; }}
-h2 {{ font-size: 1.15rem !important; font-weight: 600 !important; color: {INK} !important; }}
+.block-container {{ padding-top: 4.6rem; max-width: 1440px; }}
+h1 {{ font-size: 1.55rem !important; font-weight: 600 !important; letter-spacing: -0.01em; color: {INK} !important; }}
+h2 {{ font-size: 1.12rem !important; font-weight: 600 !important; color: {INK} !important; }}
 h3 {{ font-size: 1rem !important; font-weight: 600 !important; color: {INK} !important; }}
 .stApp p, .stApp li, .stApp label {{ color: {BODY}; }}
 [data-testid="stCaptionContainer"], [data-testid="stCaptionContainer"] p {{ color: {MUTED} !important; }}
-[data-testid="stWidgetLabel"] p {{ color: {INK} !important; font-weight: 500; font-size: 0.86rem; }}
+[data-testid="stWidgetLabel"] p {{ color: {INK} !important; font-weight: 500; font-size: 0.85rem; }}
 
-/* Sidebar: crisp text on the canvas, nav as a list with a green accent on the active page. */
-[data-testid="stSidebar"] {{ background: {CANVAS}; border-right: 1px solid {RULE}; }}
-[data-testid="stSidebar"] p, [data-testid="stSidebar"] span, [data-testid="stSidebar"] label {{ color: {INK}; }}
-[data-testid="stSidebar"] [data-testid="stCaptionContainer"] p {{ color: {MUTED} !important; }}
-[data-testid="stSidebar"] [role="radiogroup"] {{ gap: 2px; }}
-[data-testid="stSidebar"] [role="radiogroup"] label {{
-    width: 100%; margin: 0; padding: 0.5rem 0.7rem; border-left: 3px solid transparent;
-    border-radius: 0 6px 6px 0; cursor: pointer;
-}}
-[data-testid="stSidebar"] [role="radiogroup"] label p {{ color: {MUTED}; font-size: 0.9rem; }}
-[data-testid="stSidebar"] [role="radiogroup"] label:hover {{ background: {CARD}; }}
-[data-testid="stSidebar"] [role="radiogroup"] label:hover p {{ color: {INK}; }}
-[data-testid="stSidebar"] [role="radiogroup"] label:has(input:checked) {{
-    background: {CARD}; border-left-color: {ACCENT};
-}}
-[data-testid="stSidebar"] [role="radiogroup"] label:has(input:checked) p {{ color: {INK}; font-weight: 600; }}
-/* Hide only the drawn circle; the real (visually hidden) radio input stays for keyboard/screen readers. */
-[data-testid="stSidebar"] [role="radiogroup"] label > div > div:first-child:not([data-testid]) {{ display: none; }}
-.vx-nav-title {{ color: {MUTED}; font-size: 0.72rem; letter-spacing: 0.06em; margin: 0.2rem 0 0.4rem 0.2rem; }}
+/* Top bar: flat, ruled, no shadow. */
+[data-testid="stHeader"] {{ background: {CANVAS}; border-bottom: 1px solid {RULE}; box-shadow: none; }}
+[data-testid="stSidebar"], [data-testid="stSidebarCollapsedControl"] {{ display: none; }}
 
-/* Cards: metrics, tables, charts, expanders, bordered containers, forms. */
+/* Rectangular surfaces: metrics, tables, charts, expanders, bordered containers. */
 [data-testid="stMetric"] {{
-    background: {CARD}; border: 1px solid {RULE}; border-radius: 8px; padding: 0.7rem 0.9rem;
+    background: {CARD}; border: 1px solid {RULE}; border-radius: {RADIUS}; padding: 0.65rem 0.85rem;
 }}
-[data-testid="stMetricLabel"] p {{ color: {MUTED} !important; font-size: 0.8rem; }}
-[data-testid="stMetricValue"] {{ font-size: 1.45rem; font-weight: 600; color: {INK}; }}
+[data-testid="stMetricLabel"] p {{ color: {MUTED} !important; font-size: 0.78rem; }}
+[data-testid="stMetricValue"] {{ font-size: 1.35rem; font-weight: 600; color: {INK}; }}
 [data-testid="stMetricLabel"], [data-testid="stMetricLabel"] *, [data-testid="stMetricValue"],
 [data-testid="stMetricValue"] * {{ white-space: normal !important; overflow: visible !important;
     text-overflow: clip !important; line-height: 1.25; }}
-[data-testid="stDataFrame"], [data-testid="stTable"] {{ border-radius: 8px; }}
+[data-testid="stDataFrame"], [data-testid="stTable"] {{ border-radius: {RADIUS}; }}
 [data-testid="stPlotlyChart"] {{
-    background: {CARD}; border: 1px solid {RULE}; border-radius: 8px; overflow: hidden;
+    background: {CARD}; border: 1px solid {RULE}; border-radius: {RADIUS}; overflow: hidden;
 }}
-[data-testid="stExpander"] details {{ background: {CARD}; border: 1px solid {RULE}; border-radius: 8px; }}
-[data-testid="stVerticalBlockBorderWrapper"]:has(> div > [data-testid="stVerticalBlock"]) {{ border-radius: 8px; }}
+[data-testid="stExpander"] details {{ background: {CARD}; border: 1px solid {RULE}; border-radius: {RADIUS}; }}
+[data-testid="stVerticalBlockBorderWrapper"] {{ border-radius: {RADIUS} !important; }}
 [data-testid="stForm"] {{ border: none; padding: 0; }}
-[data-testid="stForm"] [data-testid="stVerticalBlockBorderWrapper"] {{ background: {CARD}; border-color: {RULE}; }}
+[data-testid="stForm"] [data-testid="stVerticalBlockBorderWrapper"],
+.stTabs [data-testid="stVerticalBlockBorderWrapper"] {{ background: {CARD}; border-color: {RULE}; }}
+.stTabs [data-baseweb="tab-list"] {{ border-bottom: 1px solid {RULE}; gap: 0; }}
+.stTabs [data-baseweb="tab"] p {{ font-weight: 500; }}
 hr {{ border-color: {RULE} !important; }}
 
-/* Brand bar and context banner. */
-.vx-brand {{
-    display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap;
-    background: {CARD}; border: 1px solid {RULE}; border-radius: 8px; padding: 0.75rem 1rem; margin-bottom: 0.7rem;
-}}
-.vx-brand-left {{ display: flex; align-items: center; gap: 0.7rem; }}
-.vx-brand-name {{ color: {INK}; font-size: 1.15rem; font-weight: 700; letter-spacing: -0.01em; }}
-.vx-brand-name span {{ color: {MUTED}; font-weight: 400; }}
-.vx-brand-tag {{ color: {MUTED}; font-size: 0.85rem; }}
-.ctx {{
-    width: 100%; box-sizing: border-box; background: {CARD}; border: 1px solid {RULE};
-    border-left: 3px solid {ACCENT}; border-radius: 8px; padding: 0.65rem 0.95rem; margin-bottom: 1.1rem;
-    color: {INK}; font-size: 0.86rem; line-height: 1.55; white-space: normal; overflow-wrap: anywhere;
-}}
-.ctx strong {{ font-weight: 600; color: {INK}; }}
-.ctx .muted {{ color: {MUTED}; }}
+/* Brand row and status badge. */
+.vx-top {{ display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap;
+    padding: 0 0 0.9rem 0; margin-bottom: 1.1rem; border-bottom: 1px solid {RULE}; }}
+.vx-mark {{ display: flex; align-items: center; gap: 0.65rem; }}
+.vx-mark .name {{ color: {INK}; font-size: 1.05rem; font-weight: 700; letter-spacing: -0.01em; }}
+.vx-mark .desc {{ color: {MUTED}; font-size: 0.85rem; padding-left: 0.65rem; border-left: 1px solid {RULE}; }}
+.vx-status {{ color: {BODY}; font-size: 0.8rem; border: 1px solid {RULE}; border-radius: {RADIUS};
+    padding: 0.28rem 0.6rem; background: {CARD}; white-space: nowrap; }}
+.vx-status .dot {{ color: {POSITIVE}; }}
+.vx-status .sep {{ color: {MUTED}; padding: 0 0.3rem; }}
 
-/* Form section headers. */
-.vx-section {{
-    color: {INK}; font-weight: 600; font-size: 0.95rem; padding-bottom: 0.45rem; margin-bottom: 0.2rem;
+/* Overview: title lockup, command callout, context box, telemetry strip. */
+.vx-lockup h1 {{ font-size: 1.9rem !important; line-height: 1.2; margin: 0.2rem 0 0.5rem 0; }}
+.vx-lockup p {{ color: {BODY}; font-size: 0.98rem; line-height: 1.6; margin: 0; max-width: 78ch; }}
+.vx-box {{
+    background: {CARD}; border: 1px solid {RULE}; border-radius: {RADIUS}; height: 100%;
+    box-sizing: border-box;
+}}
+.vx-box .head {{
+    color: {INK}; font-size: 0.82rem; font-weight: 600; padding: 0.55rem 0.9rem;
     border-bottom: 1px solid {RULE};
 }}
+.vx-box .body {{ padding: 0.7rem 0.9rem; color: {BODY}; font-size: 0.86rem; line-height: 1.55; }}
+.vx-box pre {{ margin: 0; font-family: {MONO_STACK}; font-size: 0.8rem; line-height: 1.7; color: {BODY};
+    white-space: pre-wrap; overflow-wrap: anywhere; background: transparent; }}
+.vx-box pre .c {{ color: {MUTED}; }}
+.vx-box pre .p {{ color: {POSITIVE}; }}
+.vx-kv {{ display: grid; grid-template-columns: max-content 1fr; column-gap: 1rem; row-gap: 0.3rem; margin-top: 0.7rem;
+    padding-top: 0.65rem; border-top: 1px solid {RULE}; font-size: 0.82rem; }}
+.vx-kv .k {{ color: {MUTED}; }}
+.vx-kv .v {{ color: {INK}; font-family: {MONO_STACK}; font-size: 0.8rem; }}
+.ctx {{
+    background: {CARD}; border: 1px solid {RULE}; border-radius: {RADIUS}; padding: 0.6rem 0.9rem;
+    margin: 0 0 1.1rem 0;
+    color: {BODY}; font-size: 0.84rem; line-height: 1.55; white-space: normal; overflow-wrap: anywhere; }}
+.ctx strong {{ color: {INK}; font-weight: 600; }}
+.ctx .muted {{ color: {MUTED}; }}
+.vx-strip {{ display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 1px; background: {RULE};
+    border: 1px solid {RULE}; border-radius: {RADIUS}; overflow: hidden; margin: 1.1rem 0 1.6rem 0; }}
+.vx-cell {{ background: {CARD}; padding: 0.75rem 0.95rem; }}
+.vx-cell .k {{ color: {MUTED}; font-size: 0.76rem; }}
+.vx-cell .v {{ color: {INK}; font-size: 1.35rem; font-weight: 600; margin-top: 0.15rem; }}
+.vx-cell .s {{ color: {MUTED}; font-size: 0.74rem; margin-top: 0.1rem; }}
+@media (max-width: 1100px) {{ .vx-strip {{ grid-template-columns: repeat(2, minmax(0, 1fr)); }} }}
 
-/* Landing page. */
-.vx-hero {{ padding: 1.6rem 0 1.2rem 0; max-width: 860px; }}
-.vx-hero h1 {{ font-size: 2.3rem !important; line-height: 1.15; margin: 0 0 0.7rem 0; }}
-.vx-hero p {{ color: {BODY}; font-size: 1.02rem; line-height: 1.6; margin: 0; max-width: 72ch; }}
-.vx-tiles {{
-    display: grid; grid-template-columns: repeat(5, minmax(0, 1fr));
-    gap: 0.75rem; margin: 0.4rem 0 1.4rem 0;
-}}
-.vx-tile {{ background: {CARD}; border: 1px solid {RULE}; border-radius: 8px; padding: 0.85rem 1rem; }}
-.vx-tile .v {{ color: {INK}; font-size: 1.55rem; font-weight: 600; }}
-.vx-tile .l {{ color: {MUTED}; font-size: 0.8rem; margin-top: 0.15rem; }}
-@media (max-width: 1100px) {{ .vx-tiles {{ grid-template-columns: repeat(2, minmax(0, 1fr)); }} }}
-.vx-grid {{
-    display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-    gap: 0.75rem; margin: 0.4rem 0 1rem 0;
-}}
-.vx-step {{ background: {CARD}; border: 1px solid {RULE}; border-radius: 8px; padding: 0.9rem 1rem; }}
-.vx-step .n {{ color: {POSITIVE}; font-size: 0.78rem; font-weight: 600; }}
-.vx-step .t {{ color: {INK}; font-weight: 600; margin: 0.15rem 0 0.35rem 0; }}
-.vx-step .d {{ color: {MUTED}; font-size: 0.86rem; line-height: 1.5; }}
+/* Rectangular actions: page links and anchor links styled as flat buttons. */
+.vx-actions {{ display: flex; gap: 0.6rem; flex-wrap: wrap; margin: 1rem 0 1.1rem 0; }}
+.vx-btn {{ display: inline-block; padding: 0.5rem 1rem; border-radius: {RADIUS}; font-size: 0.88rem; font-weight: 500;
+    text-decoration: none !important; border: 1px solid {RULE}; color: {INK} !important; background: {CARD}; }}
+.vx-btn:hover {{ border-color: {MUTED}; }}
+.vx-btn.primary {{ background: {ACCENT}; border-color: {ACCENT}; }}
+.vx-btn.primary:hover {{ background: #2EA043; border-color: #2EA043; }}
+
+/* Form section headers. */
+.vx-section {{ color: {INK}; font-weight: 600; font-size: 0.92rem; padding-bottom: 0.45rem; margin-bottom: 0.2rem;
+    border-bottom: 1px solid {RULE}; }}
 
 .reasons {{ margin: 0.2rem 0 0 0; padding-left: 1.1rem; font-size: 0.9rem; line-height: 1.65; }}
 .reasons .up {{ color: {INCREASES_RISK}; }}
 .reasons .down {{ color: {DECREASES_RISK}; }}
-@media (prefers-reduced-motion: reduce) {{ * {{ transition: none !important; }} }}
 </style>
 """
 
@@ -219,7 +214,7 @@ PLOT_LAYOUT = dict(
     title=dict(x=0.01, xanchor="left", font=dict(size=14, color=INK)),
     xaxis=dict(gridcolor="#21262D", linecolor=RULE, zeroline=False, tickfont=dict(color=MUTED)),
     yaxis=dict(gridcolor="#21262D", linecolor=RULE, zeroline=False, tickfont=dict(color=MUTED)),
-    legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0, title_text="",
+    legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1, title_text="",
                 font=dict(color=BODY)),
     hoverlabel=dict(font_family=FONT_STACK, bgcolor=CANVAS, bordercolor=RULE, font_color=INK),
 )
@@ -241,23 +236,24 @@ def html_safe(text: str) -> str:
     return html.escape(str(text)).replace("$", "&#36;")
 
 
-def brand_bar() -> None:
+def brand_header(threshold: float) -> None:
+    """Top-left mark and product name; top-right live status badge."""
     st.html(
-        f'<div class="vx-brand"><div class="vx-brand-left">{LOGO_SVG}'
-        '<div class="vx-brand-name">ValidaX <span>| Autonomous Transaction Validation</span></div></div>'
-        '<div class="vx-brand-tag">Precision Risk Scoring. Zero Black-Box Decisions.</div></div>'
+        f'<div class="vx-top"><div class="vx-mark">{LOGO_SVG}<span class="name">ValidaX</span>'
+        '<span class="desc">Autonomous Payment Validation Engine</span></div>'
+        f'<div class="vx-status"><span class="dot">●</span> Active<span class="sep">·</span>'
+        f'Threshold {threshold:.2f}<span class="sep">·</span>{DAILY_REVIEW_CAPACITY:,}/day cap</div></div>'
     )
 
 
 def operational_context_banner() -> None:
     st.html(
-        '<div class="ctx"><strong>FinTech / CSE303 (F20) · Transaction risk prioritization '
-        "console.</strong> Scores rank transactions for investigator review: a high score "
-        "indicates <strong>elevated risk warranting review, not a determination of fraud</strong>. "
-        f"<span class=\"muted\">Scenario assumptions:</span> missed fraud &#36;{FALSE_NEGATIVE_COST:,}, "
-        f"false-positive review &#36;{FALSE_POSITIVE_COST:,}; review capacity "
-        f"{DAILY_REVIEW_CAPACITY:,} alerts/day. Masked C/D/M/V/id_ columns appear with generic family "
-        "labels only.</div>"
+        '<div class="ctx"><strong>Operating context · FinTech / CSE303 (F20).</strong> Scores rank '
+        "transactions for investigator review: a high score indicates <strong>elevated risk warranting "
+        "review, not a determination of fraud</strong>. <span class=\"muted\">Scenario assumptions:</span> "
+        f"missed fraud &#36;{FALSE_NEGATIVE_COST:,}, false-positive review &#36;{FALSE_POSITIVE_COST:,}; "
+        f"review capacity {DAILY_REVIEW_CAPACITY:,} alerts/day. Masked C/D/M/V/id_ columns appear with "
+        "generic family labels only.</div>"
     )
 
 
@@ -642,11 +638,14 @@ def tier_table(scored: pd.DataFrame) -> pd.DataFrame:
 
 
 # ------------------------------------------------------------------- pages --
-def page_overview(scored: pd.DataFrame, summary: dict):
-    st.title("Fraud overview")
+def page_overview(scored: pd.DataFrame, summary: dict, embedded: bool = False):
+    if embedded:
+        st.subheader("Detection performance")
+    else:
+        st.title("Fraud overview")
     st.caption(
         "Chronological test window: the most recent 20% of transactions by TransactionDT "
-        "offset, never seen in training."
+        "offset, never seen in training. Figures below are for the deployed model."
     )
 
     flagged = int((scored["risk_tier"] != "Low").sum())
@@ -656,8 +655,8 @@ def page_overview(scored: pd.DataFrame, summary: dict):
     cols[1].metric("Flagged, medium and above", f"{flagged:,}")
     cols[2].metric("Fraud rate", f"{scored['isFraud'].mean():.2%}")
     cols[3].metric("Fraud value", f"${fraud_value:,.0f}")
-    cols[4].metric("XGBoost PR-AUC", f"{summary['xgboost']['pr_auc']:.3f}")
-    cols[5].metric("XGBoost ROC-AUC", f"{summary['xgboost']['roc_auc']:.3f}")
+    cols[4].metric("Deployed PR-AUC", f"{summary['xgboost']['pr_auc']:.4f}")
+    cols[5].metric("Deployed ROC-AUC", f"{summary['xgboost']['roc_auc']:.4f}")
 
     op = summary.get("cost_optimal_threshold")
     if op is not None:
@@ -761,13 +760,13 @@ def page_alert_queue(scored: pd.DataFrame):
     st.caption("Highest risk first. Filter to build a review list.")
 
     products = sorted(scored["ProductCD"].dropna().unique().tolist())
-    with st.sidebar:
-        st.subheader("Queue filters")
-        tiers = st.multiselect("Risk tier", TIERS, default=TIERS[:3])
-        chosen_products = st.multiselect("Product code", products, default=products)
-        min_score, max_score = st.slider("Risk score", 0.0, 1.0, (0.3, 1.0), 0.01)
+    with st.container(border=True):
+        f1, f2, f3, f4 = st.columns([1.2, 1.3, 1, 1.3], gap="medium")
+        tiers = f1.multiselect("Risk tier", TIERS, default=TIERS[:3])
+        chosen_products = f2.multiselect("Product code", products, default=products)
+        min_score, max_score = f3.slider("Risk score", 0.0, 1.0, (0.3, 1.0), 0.01)
         amt_lo, amt_hi = float(scored["TransactionAmt"].min()), float(scored["TransactionAmt"].max())
-        amt_range = st.slider("Amount (\\$)", amt_lo, amt_hi, (amt_lo, amt_hi))
+        amt_range = f4.slider("Amount (\\$)", amt_lo, amt_hi, (amt_lo, amt_hi))
 
     queue = scored[
         scored["risk_tier"].isin(tiers)
@@ -780,7 +779,7 @@ def page_alert_queue(scored: pd.DataFrame):
     c1.metric("In queue", f"{len(queue):,}")
     c2.metric(f"Days of review at {DAILY_REVIEW_CAPACITY:,}/day",
               f"{len(queue) / max(scored['transaction_day'].nunique(), 1) / DAILY_REVIEW_CAPACITY:.2f}")
-    c3.metric("Median risk score", f"{queue['fraud_probability'].median():.3f}" if len(queue) else "–")
+    c3.metric("Median risk score", f"{queue['fraud_probability'].median():.4f}" if len(queue) else "–")
 
     columns = ["TransactionID", "fraud_probability", "risk_tier", "TransactionAmt", "ProductCD",
                "card4", "card6", "P_emaildomain", "DeviceType", "top_reason_1"]
@@ -788,7 +787,7 @@ def page_alert_queue(scored: pd.DataFrame):
         queue[columns], hide_index=True, width="stretch", height=560,
         column_config={
             "TransactionID": st.column_config.NumberColumn("Transaction ID", format="%d"),
-            "fraud_probability": st.column_config.NumberColumn("Risk score", format="%.3f"),
+            "fraud_probability": st.column_config.NumberColumn("Risk score", format="%.4f"),
             "risk_tier": "Tier",
             "TransactionAmt": st.column_config.NumberColumn("Amount", format="$%.2f"),
             "ProductCD": "Product",
@@ -1037,8 +1036,9 @@ def explain_rows(model, key: str, X: pd.DataFrame, top_n: int):
     return [[(X.columns[j], float(row[j])) for j in idx] for row, idx in zip(values, order, strict=True)]
 
 
-def page_classify_transaction(main_summary: dict):
-    st.title("Classify a transaction")
+def page_classify_transaction(main_summary: dict, embedded: bool = False):
+    if not embedded:
+        st.title("Classify a transaction")
     st.caption("Enter one e-commerce transaction to classify it as fraudulent or legitimate. Time is a "
                "position in the dataset's relative cycle (TransactionDT is an offset, not a date).")
 
@@ -1161,8 +1161,9 @@ def page_classify_transaction(main_summary: dict):
     ))
 
 
-def page_batch_classification(bundle: dict):
-    st.title("Batch classification")
+def page_batch_classification(bundle: dict, embedded: bool = False):
+    if not embedded:
+        st.title("Batch classification")
     threshold = float(bundle["cost_optimal_threshold"])
     st.caption(md_safe(
         "Upload transactions in the IEEE-CIS format (the columns of Kaggle's train/test_transaction.csv, "
@@ -1281,96 +1282,155 @@ def page_batch_classification(bundle: dict):
     st.download_button("Download results (CSV)", shown.to_csv(index=False), "validax_predictions.csv", "text/csv")
 
 
-# ----------------------------------------------------------------- landing --
-def go_to(page: str) -> None:
-    """Button callback: switch the sidebar navigation before the next run."""
-    st.session_state["nav"] = page
-
-
-def page_landing(scored: pd.DataFrame, summary: dict) -> None:
-    rows = int(summary.get("train_rows", 0)) + int(summary.get("test_rows", 0))
+# ---------------------------------------------------------------- overview --
+def telemetry_strip(summary: dict) -> None:
+    """Five system counters in one ruled strip, all read from outputs/."""
     threshold = float(summary.get("cost_optimal_threshold", 0.5))
     curve = load_output_csv("cost_sensitive_threshold.csv")
-    at_threshold = curve.loc[(curve["threshold"] - threshold).abs().idxmin()]
-    daily = load_output_csv("daily_capacity_simulation.csv")
-    pr_auc = summary["xgboost"]["pr_auc"]
-    baseline_pr = summary["logreg"]["pr_auc"]
-    no_skill = float(scored["isFraud"].mean())
-    comparison, _ = load_optional_csv("model_comparison.csv")
-    ladder = (f"the strongest of {len(comparison)} models compared" if comparison is not None
-              else "the strongest model compared")
+    cost = float(curve.loc[(curve["threshold"] - threshold).abs().idxmin(), "total_cost"])
 
+    pr_value, pr_sub = f"{summary['xgboost']['pr_auc']:.4f}", "deployed model, test window"
+    benchmark, _ = load_optional_csv("tuning_benchmark.csv")
+    if benchmark is not None and {"selected", "test_pr_auc_mean"} <= set(benchmark.columns):
+        chosen = benchmark[benchmark["selected"].astype(str).str.lower().isin(["true", "1"])]
+        if len(chosen):
+            row = chosen.iloc[0]
+            pr_value = f"{row['test_pr_auc_mean']:.4f}"
+            std = row.get("test_pr_auc_std")
+            pr_sub = f"± {std:.4f} · benchmark mean, 2 seeds" if pd.notna(std) else "benchmark mean"
+
+    clusters, _ = load_optional_csv("alert_clusters.csv")
+    if clusters is None:
+        k_value, k_sub = "n/a", "run notebook 05 to create"
+    else:
+        k_value = f"k={len(clusters)}"
+        k_sub = (f"{int(clusters['transactions'].sum()):,} alerts clustered" if "transactions" in clusters
+                 else "K-means segments")
+
+    cells = [
+        ("PR-AUC", pr_value, pr_sub),
+        ("Cost-optimal cutoff", f"{threshold:.2f}", "minimises scenario cost"),
+        ("Scenario cost", f"&#36;{cost:,.0f}", f"at cutoff {threshold:.2f}, test window"),
+        ("Review capacity", f"{DAILY_REVIEW_CAPACITY:,}/day", "investigator alerts per day"),
+        ("Alert segments", k_value, k_sub),
+    ]
+    st.html('<div class="vx-strip">' + "".join(
+        f'<div class="vx-cell"><div class="k">{html_safe(k)}</div><div class="v">{v}</div>'
+        f'<div class="s">{html_safe(sub)}</div></div>' for k, v, sub in cells) + "</div>")
+
+
+def page_home(scored: pd.DataFrame, summary: dict) -> None:
+    rows = int(summary.get("train_rows", 0)) + int(summary.get("test_rows", 0))
+    threshold = float(summary.get("cost_optimal_threshold", 0.5))
     st.html(
-        '<div class="vx-hero"><h1>Classify every e-commerce transaction as fraudulent or legitimate, '
-        'and show why.</h1>'
-        "<p>ValidaX scores each payment with a gradient-boosted model trained on "
-        f"{rows:,} real IEEE-CIS transactions, flags the ones above a cost-optimal threshold for "
-        "investigator review, and explains every decision with plain-language reason codes. Masked "
-        "provider fields are only ever shown by family, never interpreted.</p></div>"
+        '<div class="vx-lockup"><h1>Payment fraud classification, with the reasons attached.</h1>'
+        f"<p>Gradient-boosted scoring over {rows:,} labeled IEEE-CIS e-commerce transactions. Each payment is "
+        f"classified fraudulent or legitimate at a cost-optimal cutoff of {threshold:.2f}, with TreeSHAP "
+        "reason codes for the investigator.</p></div>"
+        '<div class="vx-actions"><a class="vx-btn primary" href="./classify" target="_self">Launch Workspace →</a>'
+        '<a class="vx-btn" href="#model-benchmarks" target="_self">Model Benchmarks</a></div>'
     )
 
-    c1, c2, c3, _ = st.columns([1.1, 1, 1, 2.2])
-    c1.button("Open investigation portal", type="primary", on_click=go_to, args=("Transaction investigation",),
-              width="stretch")
-    c2.button("Classify a transaction", on_click=go_to, args=("Classify a transaction",), width="stretch")
-    c3.button("Upload a batch", on_click=go_to, args=("Batch classification",), width="stretch")
-
-    tiles = [
-        (f"{rows:,}", "labeled transactions (IEEE-CIS)"),
-        (f"{threshold:.2f}", "cost-optimal decision threshold"),
-        (f"&#36;{at_threshold['total_cost']:,.0f}", "scenario cost at that threshold"),
-        (f"{pr_auc:.3f}", f"PR-AUC ({pr_auc / no_skill:.0f}x the {no_skill:.3f} no-skill baseline)"),
-        (f"{daily['recall'].mean():.1%}", f"fraud caught at {DAILY_REVIEW_CAPACITY:,} reviews/day"),
+    train_rows, test_rows = int(summary.get("train_rows", 0)), int(summary.get("test_rows", 0))
+    params = [
+        ("Model", f"XGBoost · {summary.get('n_features', 451)} features"),
+        ("Split", f"{train_rows:,} train / {test_rows:,} test, chronological"),
+        ("Cutoff", f"{threshold:.2f}, cost-optimal"),
+        ("Costs", f"FN &#36;{FALSE_NEGATIVE_COST:,} · FP &#36;{FALSE_POSITIVE_COST:,} (scenario)"),
+        ("Capacity", f"{DAILY_REVIEW_CAPACITY:,} alerts/day"),
+        ("Masking", "C/D/M/V/id_ by family only"),
     ]
-    st.html('<div class="vx-tiles">' + "".join(
-        f'<div class="vx-tile"><div class="v">{v}</div><div class="l">{html_safe(label)}</div></div>'
-        for v, label in tiles) + "</div>")
+    command = (
+        '<div class="vx-box"><div class="head">Run locally</div><div class="body"><pre>'
+        '<span class="c"># install, test, serve</span>\n'
+        '<span class="p">&#36;</span> pip install -r requirements.txt\n'
+        '<span class="p">&#36;</span> make test\n'
+        '<span class="p">&#36;</span> streamlit run app/app.py\n'
+        '<span class="c"># container: 4 GB, 4 CPUs, read-only root filesystem</span>\n'
+        '<span class="p">&#36;</span> make docker-build &amp;&amp; make docker-run</pre>'
+        '<div class="vx-kv">' + "".join(f'<div class="k">{k}</div><div class="v">{v}</div>' for k, v in params)
+        + "</div></div></div>"
+    )
+    context = (
+        '<div class="vx-box"><div class="head">Operating context</div><div class="body">'
+        "FinTech / CSE303 (F20). Scores rank transactions for investigator review. A Fraudulent label "
+        "means <strong>elevated risk warranting review, not a determination of fraud</strong>.<br><br>"
+        f"Scenario assumptions: a missed fraud costs &#36;{FALSE_NEGATIVE_COST:,} and a false-positive review "
+        f"&#36;{FALSE_POSITIVE_COST:,}; investigators handle {DAILY_REVIEW_CAPACITY:,} alerts per day.<br><br>"
+        "Masked C1-C14, D1-D15, M1-M9, V1-V339 and id_* columns are shown with generic family labels only, "
+        "never interpreted and never with their values.</div></div>"
+    )
+    left, right = st.columns([3, 2], gap="medium")
+    with left:
+        st.html(command)
+    with right:
+        st.html(context)
 
-    st.subheader("How ValidaX decides")
-    steps = [
-        ("Data", f"{rows:,} labeled transactions joined with identity signals, split by time: the model is "
-                 f"tested only on the most recent {int(summary.get('test_rows', 0)):,}."),
-        ("Features", "451 inputs: documented fields, point-in-time card velocity (earlier transactions only) and "
-                     "masked C/D/M/V/id_ families used as opaque signals."),
-        ("Model", f"XGBoost with class weighting: PR-AUC {pr_auc:.3f} against {baseline_pr:.3f} for the "
-                  f"logistic baseline, {ladder}."),
-        ("Decision", f"Fraudulent if the score is at least {threshold:.2f}: the threshold that minimises "
-                     f"cost when a missed fraud costs &#36;{FALSE_NEGATIVE_COST:,} and a review "
-                     f"&#36;{FALSE_POSITIVE_COST:,}, under a {DAILY_REVIEW_CAPACITY:,}/day review cap."),
-        ("Explanation", "TreeSHAP reason codes for every alert. Documented fields get plain labels; masked "
-                        "columns keep generic family labels with no values shown."),
-        ("Delivery", "This Streamlit app, a read-only Docker image and CI. Single-transaction form, CSV batch "
-                     "upload and an investigation console."),
-    ]
-    st.html('<div class="vx-grid">' + "".join(
-        f'<div class="vx-step"><div class="n">{i:02d}</div><div class="t">{title}</div>'
-        f'<div class="d">{text}</div></div>' for i, (title, text) in enumerate(steps, 1)) + "</div>")
-    st.caption("Every Fraudulent label means elevated risk warranting human review, not an automated "
-               "determination of fraud. Costs and capacity are scenario assumptions.")
+    telemetry_strip(summary)
+    page_overview(scored, summary, embedded=True)
+
+
+# ------------------------------------------------------------------- pages --
+def _data():
+    return load_scored(), load_summary()
+
+
+def render_overview() -> None:
+    page_home(*_data())
+
+
+def render_classify() -> None:
+    _, summary = _data()
+    operational_context_banner()
+    st.title("Classify")
+    single, batch = st.tabs(["Single transaction", "Batch upload (CSV)"])
+    with single:
+        page_classify_transaction(summary, embedded=True)
+    with batch:
+        bundle = get_main_bundle()
+        if bundle is not None:
+            page_batch_classification(bundle, embedded=True)
+
+
+def render_alerts() -> None:
+    scored, _ = _data()
+    operational_context_banner()
+    page_alert_queue(scored)
+
+
+def render_investigate() -> None:
+    scored, _ = _data()
+    operational_context_banner()
+    bundle = get_main_bundle()
+    if bundle is not None:
+        page_investigation(scored, bundle)
+
+
+def render_simulator() -> None:
+    scored, summary = _data()
+    operational_context_banner()
+    page_threshold_simulator(scored, summary)
+
+
+NAV_PAGES = [
+    ("Overview", render_overview, "overview"),
+    ("Classify", render_classify, "classify"),
+    ("Alerts", render_alerts, "alerts"),
+    ("Investigate", render_investigate, "investigate"),
+    ("Simulator", render_simulator, "simulator"),
+]
 
 
 # --------------------------------------------------------------------- main --
 def main():
     st.html(STYLE)
-    if "nav" not in st.session_state:  # deep links: ?page=investigate
-        slug = st.query_params.get("page")
-        st.session_state["nav"] = next((p for p, s in PAGE_SLUGS.items() if s == slug), LANDING)
-    st.sidebar.html(f'<div class="vx-brand-left" style="margin:0.2rem 0 0.9rem 0.1rem;">{LOGO_SVG}'
-                    '<div class="vx-brand-name">ValidaX</div></div>'
-                    '<div class="vx-nav-title">NAVIGATION</div>')
-    page = st.sidebar.radio("Navigate", PAGES, key="nav", label_visibility="collapsed")
-    st.query_params["page"] = PAGE_SLUGS[page]
-    st.sidebar.divider()
-    st.sidebar.caption(
-        "Data: IEEE-CIS Fraud Detection (Kaggle, Vesta Corporation). Real anonymized "
-        "transactions; masked fields carry family labels only."
-    )
-
-    brand_bar()
-    operational_context_banner()
+    pages = [st.Page(fn, title=title, url_path=path, default=(i == 0))
+             for i, (title, fn, path) in enumerate(NAV_PAGES)]
+    navigation = st.navigation(pages, position="top")
 
     missing = missing_core_outputs()
     if missing:
+        brand_header(0.5)
         commands = sorted({CORE_OUTPUTS[name] for name in missing})
         st.error(
             "The console can't start because these outputs are missing: "
@@ -1379,26 +1439,8 @@ def main():
         )
         st.stop()
 
-    scored, summary = load_scored(), load_summary()
-
-    if page == LANDING:
-        page_landing(scored, summary)
-    elif page == "Classify a transaction":
-        page_classify_transaction(summary)
-    elif page == "Batch classification":
-        bundle = get_main_bundle()
-        if bundle is not None:
-            page_batch_classification(bundle)
-    elif page == "Fraud overview":
-        page_overview(scored, summary)
-    elif page == "Alert queue":
-        page_alert_queue(scored)
-    elif page == "Transaction investigation":
-        bundle = get_main_bundle()
-        if bundle is not None:
-            page_investigation(scored, bundle)
-    else:
-        page_threshold_simulator(scored, summary)
+    brand_header(float(load_summary().get("cost_optimal_threshold", 0.5)))
+    navigation.run()
 
 
 if __name__ == "__main__":

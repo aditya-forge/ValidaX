@@ -41,36 +41,57 @@ def test_classification_table_counts(console):
     assert m["estimated_cost"] == 500 + 10
 
 
-@pytest.mark.skipif(not (REPO / "outputs" / "scored_transactions.csv").exists(), reason="outputs/ not present")
-@pytest.mark.parametrize("page", ["ValidaX Landing", "Classify a transaction", "Batch classification", "Fraud overview",
-                                  "Alert queue", "Threshold simulator"])
-def test_pages_render_without_errors(page):
-    before = {p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in PROTECTED}
+PAGE_SCRIPT = """
+import importlib.util
+import streamlit as st
+spec = importlib.util.spec_from_file_location("console", r"{app}")
+app = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(app)
+st.html(app.STYLE)
+app.{render}()
+"""
+
+
+def run_page(render: str) -> AppTest:
+    script = PAGE_SCRIPT.format(app=REPO / "app" / "app.py", render=render)
+    return AppTest.from_string(script, default_timeout=300).run()
+
+
+def test_app_boots_with_top_navigation():
+    """The full script: brand header + st.navigation(position='top') + default Overview page."""
     at = AppTest.from_file(str(REPO / "app" / "app.py"), default_timeout=300).run()
-    at.sidebar.radio[0].set_value(page).run()
+    assert not at.exception, [e.message for e in at.exception]
+    bodies = [h.proto.body for h in at.get("html")]
+    assert any("vx-status" in b and "Threshold 0.24" in b for b in bodies)      # top-right status badge
+    assert any("vx-strip" in b and "&#36;566,840" in b for b in bodies)          # telemetry strip
+
+
+@pytest.mark.skipif(not (REPO / "outputs" / "scored_transactions.csv").exists(), reason="outputs/ not present")
+@pytest.mark.parametrize("render", ["render_overview", "render_classify", "render_alerts",
+                                    "render_investigate", "render_simulator"])
+def test_pages_render_without_errors(render):
+    before = {p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in PROTECTED}
+    at = run_page(render)
     assert not at.exception, [e.message for e in at.exception]
     assert not at.error, [e.value for e in at.error]
-    assert any('class="ctx"' in h.proto.body and "not a determination of fraud" in h.proto.body
-               for h in at.get("html"))
+    assert any("not a determination of fraud" in h.proto.body for h in at.get("html"))
     after = {p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in PROTECTED}
     assert before == after
 
 
+def test_overview_has_callout_actions_and_strip():
+    at = run_page("render_overview")
+    bodies = " ".join(h.proto.body for h in at.get("html"))
+    assert "Launch Workspace" in bodies and 'href="#model-benchmarks"' in bodies
+    assert "streamlit run app/app.py" in bodies and "&#36;" in bodies and "$ " not in bodies
+    assert bodies.count('class="vx-cell"') == 5
+
+
 def test_classify_form_submits_and_predicts():
-    at = AppTest.from_file(str(REPO / "app" / "app.py"), default_timeout=300).run()
-    at.sidebar.radio[0].set_value("Classify a transaction").run()
+    at = run_page("render_classify")
     at.button[0].click().run()
     assert not at.exception, [e.message for e in at.exception]
     verdict = next(h.proto.body for h in at.get("html") if "Prediction</div>" in h.proto.body)
     assert ("Fraudulent" in verdict) or ("Legitimate" in verdict)
     reasons = next(h.proto.body for h in at.get("html") if 'class="reasons"' in h.proto.body)
     assert reasons.count("<li") == 5
-
-
-def test_landing_buttons_switch_page():
-    at = AppTest.from_file(str(REPO / "app" / "app.py"), default_timeout=300).run()
-    assert at.sidebar.radio[0].value == "ValidaX Landing"
-    assert any("vx-tile" in h.proto.body for h in at.get("html"))
-    at.button[0].click().run()
-    assert at.sidebar.radio[0].value == "Transaction investigation"
-    assert not at.exception, [e.message for e in at.exception]
