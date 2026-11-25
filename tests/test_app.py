@@ -87,11 +87,29 @@ def test_overview_has_callout_actions_and_strip():
     assert bodies.count('class="vx-cell"') == 5
 
 
+def _result_values(at):
+    import re
+    body = next(h.proto.body for h in at.get("html") if "vx-result" in h.proto.body)
+    return [re.sub(r"<[^>]+>", "", v) for v in re.findall(r'<div class="v">(.*?)</div>', body)], body
+
+
 def test_classify_form_submits_and_predicts():
     at = run_page("render_classify")
-    at.button[0].click().run()
+    [b for b in at.button if b.label == "Classify transaction"][0].click().run()
     assert not at.exception, [e.message for e in at.exception]
-    verdict = next(h.proto.body for h in at.get("html") if "Prediction</div>" in h.proto.body)
-    assert ("Fraudulent" in verdict) or ("Legitimate" in verdict)
+    values, body = _result_values(at)
+    assert values[0] in ("Flag for review", "No alert") and len(values[1]) == 6      # 4-decimal score
+    assert "&#36;500" in body and "&#36;10" in body and "500 alerts/day" in body
     reasons = next(h.proto.body for h in at.get("html") if 'class="reasons"' in h.proto.body)
     assert reasons.count("<li") == 5
+
+
+@pytest.mark.parametrize("preset, decision", [("Typical repeat card", "No alert"),
+                                              ("First-seen card", "Flag for review"),
+                                              ("High-risk spike", "Flag for review")])
+def test_presets_classify_in_one_click(preset, decision):
+    at = run_page("render_classify")
+    at.button(key=f"preset_{preset}").click().run()
+    assert not at.exception and not at.warning
+    values, _ = _result_values(at)
+    assert values[0] == decision and values[3] == f"Preset: {preset}"

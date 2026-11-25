@@ -11,7 +11,7 @@ from an undisclosed reference point, not a calendar timestamp. Many columns
 (Vesta); this console never claims to know their meaning. They are shown with
 generic family labels only, and their raw values are never displayed.
 
-Operational context (FinTech / CSE303 F20): this is a transaction risk
+Operating context: this is a transaction risk
 prioritization console. A score indicates elevated risk warranting review,
 not a determination of fraud. Cost and capacity figures are scenario
 assumptions imported from src/model.py.
@@ -73,7 +73,7 @@ OPTIONAL_OUTPUTS = {
 
 TIERS = ["Critical", "High", "Medium", "Low"]
 
-st.set_page_config(page_title="ValidaX | Autonomous Payment Validation Engine", layout="wide")
+st.set_page_config(page_title="ValidaX | Payment Validation Engine", layout="wide")
 
 # ---------------------------------------------------------------- design --
 # Flat, rectangular system UI: one canvas, one card surface, 1px rules, 4px corners.
@@ -188,6 +188,12 @@ hr {{ border-color: {RULE} !important; }}
 .vx-cell .s {{ color: {MUTED}; font-size: 0.74rem; margin-top: 0.1rem; }}
 @media (max-width: 1100px) {{ .vx-strip {{ grid-template-columns: repeat(2, minmax(0, 1fr)); }} }}
 
+.vx-result {{ display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1px; background: {RULE};
+    border: 1px solid {RULE}; border-radius: {RADIUS}; overflow: hidden; margin: 1rem 0 0.5rem 0; }}
+.vx-result .v {{ font-size: 1.3rem; }}
+@media (max-width: 1100px) {{ .vx-result {{ grid-template-columns: repeat(2, minmax(0, 1fr)); }} }}
+.vx-note {{ color: {MUTED}; font-size: 0.82rem; line-height: 1.5; }}
+
 /* Rectangular actions: page links and anchor links styled as flat buttons. */
 .vx-actions {{ display: flex; gap: 0.6rem; flex-wrap: wrap; margin: 1rem 0 1.1rem 0; }}
 .vx-btn {{ display: inline-block; padding: 0.5rem 1rem; border-radius: {RADIUS}; font-size: 0.88rem; font-weight: 500;
@@ -240,7 +246,7 @@ def brand_header(threshold: float) -> None:
     """Top-left mark and product name; top-right live status badge."""
     st.html(
         f'<div class="vx-top"><div class="vx-mark">{LOGO_SVG}<span class="name">ValidaX</span>'
-        '<span class="desc">Autonomous Payment Validation Engine</span></div>'
+        '<span class="desc">Payment Validation Engine</span></div>'
         f'<div class="vx-status"><span class="dot">●</span> Active<span class="sep">·</span>'
         f'Threshold {threshold:.2f}<span class="sep">·</span>{DAILY_REVIEW_CAPACITY:,}/day cap</div></div>'
     )
@@ -248,7 +254,7 @@ def brand_header(threshold: float) -> None:
 
 def operational_context_banner() -> None:
     st.html(
-        '<div class="ctx"><strong>Operating context · FinTech / CSE303 (F20).</strong> Scores rank '
+        '<div class="ctx"><strong>Operating context.</strong> Scores rank '
         "transactions for investigator review: a high score indicates <strong>elevated risk warranting "
         "review, not a determination of fraud</strong>. <span class=\"muted\">Scenario assumptions:</span> "
         f"missed fraud &#36;{FALSE_NEGATIVE_COST:,}, false-positive review &#36;{FALSE_POSITIVE_COST:,}; "
@@ -1014,21 +1020,6 @@ def page_threshold_simulator(scored: pd.DataFrame, summary: dict):
 
 
 # --------------------------------------------------------- classification --
-def verdict_banner(label: str, probability: float, threshold: float) -> None:
-    fraud = label == inf.FRAUDULENT
-    color = RISK_COLORS["Critical"] if fraud else POSITIVE
-    meaning = ("flag for review: elevated risk, not a final determination of fraud" if fraud
-               else "below the review threshold: no alert")
-    st.html(
-        f'<div style="background:{CARD};border:1px solid {RULE};border-left:4px solid {color};'
-        f'border-radius:8px;padding:0.9rem 1.1rem;margin:0.4rem 0 0.9rem 0;">'
-        f'<div style="font-size:0.8rem;color:{MUTED};">Prediction</div>'
-        f'<div style="font-size:1.6rem;font-weight:600;color:{color};">{html_safe(label)}</div>'
-        f'<div style="font-size:0.88rem;color:{INK};">Fraud probability {probability:.4f} vs. threshold '
-        f'{threshold:.2f}, {html_safe(meaning)}.</div></div>'
-    )
-
-
 def explain_rows(model, key: str, X: pd.DataFrame, top_n: int):
     """Top-|SHAP| (feature, value) pairs per row, highest first."""
     values = get_explainer(model, key)(X).values
@@ -1036,11 +1027,72 @@ def explain_rows(model, key: str, X: pd.DataFrame, top_n: int):
     return [[(X.columns[j], float(row[j])) for j in idx] for row, idx in zip(values, order, strict=True)]
 
 
+# Form state. Every field has a session-state key so presets can fill the form.
+NOT_PROVIDED, UNKNOWN_DEVICE = "(not provided)", "(unknown)"
+FORM_DEFAULTS = {
+    "cls_amount": 117.0, "cls_product": "W", "cls_card4": "visa", "cls_card6": "debit",
+    "cls_p_email": "gmail.com", "cls_r_email": NOT_PROVIDED, "cls_device": UNKNOWN_DEVICE,
+    "cls_hour": 14, "cls_dow": 2,
+    "cls_first_seen": False, "cls_prior": 12, "cls_avg": 95.0, "cls_max": 300.0, "cls_gap": 30.0,
+    "cls_addr1": 299.0, "cls_addr2": 87.0, "cls_dist1": None, "cls_dist2": None,
+}
+# Illustrative inputs (not real customers). Each is applied on top of FORM_DEFAULTS.
+FORM_PRESETS = {
+    "Typical repeat card": {},
+    "First-seen card": {"cls_first_seen": True},
+    "High-risk spike": {
+        "cls_amount": 450.0, "cls_product": "H", "cls_card6": "credit", "cls_p_email": "outlook.com",
+        "cls_r_email": "outlook.com", "cls_device": "mobile", "cls_hour": 3,
+        "cls_prior": 2, "cls_avg": 40.0, "cls_max": 60.0, "cls_gap": 0.07,
+    },
+}
+
+
+def init_form_state(meta: dict) -> None:
+    defaults = {**FORM_DEFAULTS, **{f"cls_{k}": v for k, v in meta.get("form_defaults", {}).items()}}
+    for key, value in defaults.items():
+        st.session_state.setdefault(key, value)
+
+
+def apply_preset(name: str, meta: dict) -> None:
+    """Button callback: reset the form, apply the preset, classify on the next run."""
+    defaults = {**FORM_DEFAULTS, **{f"cls_{k}": v for k, v in meta.get("form_defaults", {}).items()}}
+    st.session_state.update({**defaults, **FORM_PRESETS[name]})
+    st.session_state["cls_run"] = True
+    st.session_state["cls_preset"] = name
+
+
+def result_block(probability: float, threshold: float, deployed_threshold: float, preset) -> None:
+    """Decision, score and operating context first; links to drivers and threshold testing."""
+    flagged = probability >= threshold
+    decision = "Flag for review" if flagged else "No alert"
+    label = inf.FRAUDULENT if flagged else inf.LEGITIMATE
+    color = RISK_COLORS["Critical"] if flagged else POSITIVE
+    source = f"Preset: {preset}" if preset else "Manual input"
+    cells = [
+        ("Decision", f'<span style="color:{color}">{decision}</span>', f"classified {label.lower()}"),
+        ("Risk score", f"{probability:.4f}", "form model probability"),
+        ("Cutoff", f"{threshold:.2f}", f"form model · deployed model uses {deployed_threshold:.2f}"),
+        ("Input", html_safe(source), "edit any field and reclassify"),
+    ]
+    st.html(
+        f'<div class="vx-result" style="border-left:3px solid {color};">' + "".join(
+            f'<div class="vx-cell"><div class="k">{k}</div><div class="v">{v}</div>'
+            f'<div class="s">{html_safe(s)}</div></div>'
+            for k, v, s in cells) + "</div>"
+        f'<div class="vx-note">Scenario: missed fraud &#36;{FALSE_NEGATIVE_COST:,} · false-positive review '
+        f"&#36;{FALSE_POSITIVE_COST:,} · capacity {DAILY_REVIEW_CAPACITY:,} alerts/day. "
+        "Flag for review means elevated risk warranting review, not a determination of fraud.</div>"
+        '<div class="vx-actions">'
+        '<a class="vx-btn" href="#risk-drivers" target="_self">Inspect drivers ↓</a>'
+        '<a class="vx-btn" href="./simulator" target="_self">Test thresholds →</a>'
+        '<a class="vx-btn" href="./investigate" target="_self">Investigate scored transactions →</a></div>'
+    )
+
+
 def page_classify_transaction(main_summary: dict, embedded: bool = False):
     if not embedded:
         st.title("Classify a transaction")
-    st.caption("Enter one e-commerce transaction to classify it as fraudulent or legitimate. Time is a "
-               "position in the dataset's relative cycle (TransactionDT is an offset, not a date).")
 
     missing = inference_assets_missing()
     if not FORM_MODEL_PATH.is_file():
@@ -1052,82 +1104,91 @@ def page_classify_transaction(main_summary: dict, embedded: bool = False):
     bundle = load_form_model()
     meta, _ = load_inference_assets()
     cats = meta["categories"]
+    init_form_state(meta)
 
-    def pick(options, preferred):
-        return options.index(preferred) if preferred in options else 0
+    preset_cols = st.columns([1, 1, 1, 3])
+    for col, name in zip(preset_cols[:3], FORM_PRESETS, strict=False):
+        col.button(name, on_click=apply_preset, args=(name, meta), width="stretch", key=f"preset_{name}")
+    preset_cols[3].caption("Presets fill the form with illustrative values and classify immediately. "
+                           "Time fields are positions in the dataset's relative cycle, not clock dates.")
 
     def section(title: str) -> None:
         st.html(f'<div class="vx-section">{html_safe(title)}</div>')
 
-    defaults = meta.get("form_defaults", {})
-    none = "(not provided)"
     with st.form("classify_transaction", border=False):
         top_left, top_right = st.columns(2, gap="medium")
         with top_left.container(border=True):
             section("Payment")
             c1, c2 = st.columns(2)
-            amount = c1.number_input("Amount (\\$)", min_value=0.01, value=117.00, step=1.0, format="%.2f")
-            product = c2.selectbox("Product code", cats["ProductCD"], index=pick(cats["ProductCD"], "W"))
+            c1.number_input("Amount (\\$)", min_value=0.01, step=1.0, format="%.2f", key="cls_amount")
+            c2.selectbox("Product code", cats["ProductCD"], key="cls_product")
             c1, c2 = st.columns(2)
-            card4 = c1.selectbox("Card network", cats["card4"], index=pick(cats["card4"], "visa"))
-            card6 = c2.selectbox("Card type", cats["card6"], index=pick(cats["card6"], "debit"))
+            c1.selectbox("Card network", cats["card4"], key="cls_card4")
+            c2.selectbox("Card type", cats["card6"], key="cls_card6")
 
         with top_right.container(border=True):
             section("Customer & Device")
             c1, c2 = st.columns(2)
-            p_email = c1.selectbox("Purchaser email domain", [none, *cats["P_emaildomain"]],
-                                   index=pick([none, *cats["P_emaildomain"]], "gmail.com"))
-            r_email = c2.selectbox("Recipient email domain", [none, *cats["R_emaildomain"]])
+            c1.selectbox("Purchaser email domain", [NOT_PROVIDED, *cats["P_emaildomain"]], key="cls_p_email")
+            c2.selectbox("Recipient email domain", [NOT_PROVIDED, *cats["R_emaildomain"]], key="cls_r_email")
             c1, c2, c3 = st.columns(3)
-            device = c1.selectbox("Device type", ["(unknown)", *cats["DeviceType"]])
-            hour = c2.number_input("Hour (relative, 0-23)", min_value=0, max_value=23, value=14)
-            dow = c3.number_input("Day (relative, 0-6)", min_value=0, max_value=6, value=2)
+            c1.selectbox("Device type", [UNKNOWN_DEVICE, *cats["DeviceType"]], key="cls_device")
+            c2.number_input("Hour (relative, 0-23)", min_value=0, max_value=23, key="cls_hour")
+            c3.number_input("Day (relative, 0-6)", min_value=0, max_value=6, key="cls_dow")
 
         bottom_left, bottom_right = st.columns(2, gap="medium")
         with bottom_left.container(border=True):
             section("Card History")
-            first_seen = st.checkbox("First transaction seen for this card (history below is ignored)")
+            st.checkbox("First transaction seen for this card (history below is ignored)", key="cls_first_seen")
             c1, c2 = st.columns(2)
-            prior = c1.number_input("Earlier transactions", min_value=0, value=12, step=1)
-            avg_prior = c2.number_input("Average past amount (\\$)", min_value=0.0, value=95.0, step=1.0)
+            c1.number_input("Earlier transactions", min_value=0, step=1, key="cls_prior")
+            c2.number_input("Average past amount (\\$)", min_value=0.0, step=1.0, key="cls_avg")
             c1, c2 = st.columns(2)
-            max_prior = c1.number_input("Largest past amount (\\$)", min_value=0.0, value=300.0, step=1.0)
-            gap_hours = c2.number_input("Hours since last transaction", min_value=0.0, value=30.0, step=1.0)
+            c1.number_input("Largest past amount (\\$)", min_value=0.0, step=1.0, key="cls_max")
+            c2.number_input("Hours since last transaction", min_value=0.0, step=0.5, format="%.2f", key="cls_gap")
 
         with bottom_right.container(border=True):
             section("Billing Address")
             c1, c2 = st.columns(2)
-            addr1 = c1.number_input("addr1 (billing region code)", value=defaults.get("addr1"), step=1.0)
-            addr2 = c2.number_input("addr2 (billing country code)", value=defaults.get("addr2"), step=1.0)
+            c1.number_input("addr1 (billing region code)", step=1.0, key="cls_addr1")
+            c2.number_input("addr2 (billing country code)", step=1.0, key="cls_addr2")
             c1, c2 = st.columns(2)
-            dist1 = c1.number_input("dist1 (distance, optional)", value=None, step=1.0)
-            dist2 = c2.number_input("dist2 (distance, optional)", value=None, step=1.0)
-            st.caption("Address codes are prefilled with the most common values in the data. Clear them only "
-                       "if the address is really unknown: a missing billing address is itself a strong fraud "
-                       "signal (11.8% fraud vs. 2.5% when present). Distances are usually missing.")
+            c1.number_input("dist1 (distance, optional)", step=1.0, key="cls_dist1")
+            c2.number_input("dist2 (distance, optional)", step=1.0, key="cls_dist2")
+            st.caption("Address codes default to the most common values in the data. Clear them only if the "
+                       "address is unknown: a missing billing address is itself a strong fraud signal "
+                       "(11.8% fraud vs. 2.5% when present). Distances are usually missing.")
         submitted = st.form_submit_button("Classify transaction", type="primary")
 
-    if not submitted:
-        st.info("Fill in the transaction and select **Classify transaction**.")
+    run_from_preset = st.session_state.pop("cls_run", False)
+    if submitted:
+        st.session_state["cls_preset"] = None
+    if not (submitted or run_from_preset):
+        st.info("Pick a preset or fill in the transaction, then select **Classify transaction**.")
         return
 
+    state = st.session_state
+    first_seen = bool(state["cls_first_seen"])
     inputs = {
-        "TransactionAmt": amount, "ProductCD": product, "card4": card4, "card6": card6,
-        "P_emaildomain": None if p_email == none else p_email,
-        "R_emaildomain": None if r_email == none else r_email,
-        "DeviceType": None if device == "(unknown)" else device,
-        "addr1": addr1, "addr2": addr2, "dist1": dist1, "dist2": dist2,
-        "transaction_hour": hour, "transaction_dow": dow,
-        "card_prior_txn_count": 0 if first_seen else prior,
-        "card_avg_amount_prior": avg_prior, "card_max_amount_prior": max_prior,
-        "seconds_since_card_last_txn": None if first_seen else gap_hours * 3600,
+        "TransactionAmt": state["cls_amount"], "ProductCD": state["cls_product"],
+        "card4": state["cls_card4"], "card6": state["cls_card6"],
+        "P_emaildomain": None if state["cls_p_email"] == NOT_PROVIDED else state["cls_p_email"],
+        "R_emaildomain": None if state["cls_r_email"] == NOT_PROVIDED else state["cls_r_email"],
+        "DeviceType": None if state["cls_device"] == UNKNOWN_DEVICE else state["cls_device"],
+        "addr1": state["cls_addr1"], "addr2": state["cls_addr2"],
+        "dist1": state["cls_dist1"], "dist2": state["cls_dist2"],
+        "transaction_hour": state["cls_hour"], "transaction_dow": state["cls_dow"],
+        "card_prior_txn_count": 0 if first_seen else state["cls_prior"],
+        "card_avg_amount_prior": state["cls_avg"], "card_max_amount_prior": state["cls_max"],
+        "seconds_since_card_last_txn": None if first_seen else state["cls_gap"] * 3600,
     }
     X = inf.prepare_single(inputs, meta, bundle["feature_cols"])
     probability = float(bundle["xgb_model"].predict_proba(X)[:, 1][0])
     threshold = float(bundle["threshold"])
-    label = str(inf.classify([probability], threshold)[0])
-    verdict_banner(label, probability, threshold)
+    result_block(probability, threshold, float(main_summary.get("cost_optimal_threshold", 0.5)),
+                 st.session_state.get("cls_preset"))
 
+    st.subheader("Risk drivers")
     contributions = explain_rows(bundle["xgb_model"], "form", X, top_n=8)[0]
     row = X.iloc[0]
     is_first = bool(row["card_is_first_seen"] == 1)
@@ -1138,8 +1199,8 @@ def page_classify_transaction(main_summary: dict, embedded: bool = False):
         marker_color=[INCREASES_RISK if v > 0 else DECREASES_RISK for v in chart["shap_value"]],
         hovertemplate="%{y}: %{x:+.3f}<extra></extra>",
     ))
-    left, right = st.columns([3, 2])
-    left.plotly_chart(styled(fig, "What drove this prediction (red raises risk, blue lowers it)",
+    left, right = st.columns([3, 2], gap="medium")
+    left.plotly_chart(styled(fig, "SHAP contributions (red raises risk, blue lowers it)",
                              height=360, xaxis_title="SHAP value"), width="stretch")
     with right:
         st.markdown("**Top reasons**")
@@ -1152,12 +1213,12 @@ def page_classify_transaction(main_summary: dict, embedded: bool = False):
     s = bundle["summary"]["test"]
     main_pr = main_summary["xgboost"]["pr_auc"]
     st.caption(md_safe(
-        f"Form model: XGBoost on {bundle['summary']['features']} interpretable fields (no masked columns can be "
-        f"typed in). On the 118,108-transaction test window it reaches PR-AUC {s['pr_auc']:.3f} / ROC-AUC "
-        f"{s['roc_auc']:.3f}, and at threshold {threshold:.2f} catches {s['at_threshold']['recall']:.1%} of fraud "
-        f"at {s['at_threshold']['precision']:.1%} precision. The full 451-feature model (PR-AUC {main_pr:.3f}) is "
-        "more accurate; use Batch classification for rows in the IEEE-CIS format. Threshold chosen for the "
-        f"${FALSE_NEGATIVE_COST:,} missed-fraud / ${FALSE_POSITIVE_COST:,} false-positive scenario."
+        f"Form model: XGBoost on {bundle['summary']['features']} interpretable fields (masked columns can't be "
+        f"entered by hand). Test window: PR-AUC {s['pr_auc']:.3f} / ROC-AUC {s['roc_auc']:.3f}; at cutoff "
+        f"{threshold:.2f} it catches {s['at_threshold']['recall']:.1%} of fraud at "
+        f"{s['at_threshold']['precision']:.1%} "
+        f"precision. The deployed 451-feature model (PR-AUC {main_pr:.3f}) is more accurate; use Batch upload for "
+        "rows in the IEEE-CIS format."
     ))
 
 
@@ -1353,7 +1414,7 @@ def page_home(scored: pd.DataFrame, summary: dict) -> None:
     )
     context = (
         '<div class="vx-box"><div class="head">Operating context</div><div class="body">'
-        "FinTech / CSE303 (F20). Scores rank transactions for investigator review. A Fraudulent label "
+        "Scores rank transactions for investigator review. A Fraudulent label "
         "means <strong>elevated risk warranting review, not a determination of fraud</strong>.<br><br>"
         f"Scenario assumptions: a missed fraud costs &#36;{FALSE_NEGATIVE_COST:,} and a false-positive review "
         f"&#36;{FALSE_POSITIVE_COST:,}; investigators handle {DAILY_REVIEW_CAPACITY:,} alerts per day.<br><br>"
