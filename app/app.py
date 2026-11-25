@@ -19,6 +19,7 @@ assumptions imported from src/model.py.
 Reads: app/model.pkl and outputs/ (never written). Optional results from
 notebooks 04/05 are shown when present and skipped with a note when not.
 """
+import base64
 import collections
 import html
 import json
@@ -70,63 +71,157 @@ OPTIONAL_OUTPUTS = {
     "alert_clusters.csv": "notebooks/05_tuning_and_benchmark.ipynb",
 }
 
-PAGES = ["Classify a transaction", "Batch classification", "Fraud overview", "Alert queue",
+LANDING = "ValidaX Landing"
+PAGES = [LANDING, "Classify a transaction", "Batch classification", "Fraud overview", "Alert queue",
          "Transaction investigation", "Threshold simulator"]
+PAGE_SLUGS = {LANDING: "home", "Classify a transaction": "classify", "Batch classification": "batch",
+              "Fraud overview": "overview", "Alert queue": "queue",
+              "Transaction investigation": "investigate", "Threshold simulator": "threshold"}
 TIERS = ["Critical", "High", "Medium", "Low"]
 
-st.set_page_config(page_title="Fraud risk operations console", layout="wide")
+st.set_page_config(page_title="ValidaX | Autonomous Transaction Validation", page_icon="🛡️", layout="wide")
 
 # ---------------------------------------------------------------- design --
-INK = "#1B2430"
-MUTED = "#5B6676"
-RULE = "#D5DBE3"
-PANEL = "#F4F6F9"
-DATA = "#2F5D8A"
-RISK_COLORS = {"Critical": "#B42318", "High": "#D9730D", "Medium": "#C9A227", "Low": "#8A94A6"}
+# Dark design system (also set in .streamlit/config.toml so native widgets,
+# menus and data tables render dark): canvas, card, border, text, muted, accent.
+CANVAS = "#0E1117"
+CARD = "#161B22"
+RULE = "#30363D"
+INK = "#F0F6FC"
+BODY = "#C9D1D9"
+MUTED = "#8B949E"
+ACCENT = "#238636"
+POSITIVE = "#3FB950"
+DATA = "#58A6FF"
+PANEL = CARD
+RISK_COLORS = {"Critical": "#F85149", "High": "#DB6D28", "Medium": "#D29922", "Low": "#6E7681"}
 INCREASES_RISK, DECREASES_RISK = RISK_COLORS["Critical"], DATA
 FONT_STACK = "'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif"
 
+_LOGO_MARKUP = (
+    f'<svg xmlns="http://www.w3.org/2000/svg" width="30" height="30" viewBox="0 0 24 24" fill="none">'
+    f'<path d="M12 2.5 4 5.6v6.1c0 4.9 3.4 8.9 8 9.8 4.6-.9 8-4.9 8-9.8V5.6l-8-3.1Z" '
+    f'fill="{ACCENT}" stroke="{POSITIVE}" stroke-width="1.2"/>'
+    f'<path d="m8.4 12.2 2.5 2.5 4.9-5" stroke="{INK}" stroke-width="2" stroke-linecap="round" '
+    f'stroke-linejoin="round"/></svg>'
+)
+# st.html sanitises inline <svg>, so the mark is embedded as an image.
+LOGO_SVG = ('<img alt="ValidaX" width="30" height="30" src="data:image/svg+xml;base64,'
+            + base64.b64encode(_LOGO_MARKUP.encode()).decode() + '">')
+
 STYLE = f"""
 <style>
-@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&display=swap');
-.stApp {{ font-family: {FONT_STACK}; color: {INK}; font-variant-numeric: tabular-nums; }}
-.block-container {{ padding-top: 1.6rem; max-width: 1440px; }}
-h1 {{ font-size: 1.55rem !important; font-weight: 600 !important; letter-spacing: -0.01em; }}
-h2 {{ font-size: 1.12rem !important; font-weight: 600 !important; }}
-h3 {{ font-size: 0.98rem !important; font-weight: 600 !important; }}
-[data-testid="stSidebar"] {{ background: {PANEL}; border-right: 1px solid {RULE}; }}
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&display=swap');
+.stApp {{ font-family: {FONT_STACK}; background: {CANVAS}; color: {INK}; font-variant-numeric: tabular-nums; }}
+.block-container {{ padding-top: 4.4rem; max-width: 1440px; }}
+h1 {{ font-size: 1.6rem !important; font-weight: 600 !important; letter-spacing: -0.015em; color: {INK} !important; }}
+h2 {{ font-size: 1.15rem !important; font-weight: 600 !important; color: {INK} !important; }}
+h3 {{ font-size: 1rem !important; font-weight: 600 !important; color: {INK} !important; }}
+.stApp p, .stApp li, .stApp label {{ color: {BODY}; }}
+[data-testid="stCaptionContainer"], [data-testid="stCaptionContainer"] p {{ color: {MUTED} !important; }}
+[data-testid="stWidgetLabel"] p {{ color: {INK} !important; font-weight: 500; font-size: 0.86rem; }}
+
+/* Sidebar: crisp text on the canvas, nav as a list with a green accent on the active page. */
+[data-testid="stSidebar"] {{ background: {CANVAS}; border-right: 1px solid {RULE}; }}
+[data-testid="stSidebar"] p, [data-testid="stSidebar"] span, [data-testid="stSidebar"] label {{ color: {INK}; }}
+[data-testid="stSidebar"] [data-testid="stCaptionContainer"] p {{ color: {MUTED} !important; }}
+[data-testid="stSidebar"] [role="radiogroup"] {{ gap: 2px; }}
+[data-testid="stSidebar"] [role="radiogroup"] label {{
+    width: 100%; margin: 0; padding: 0.5rem 0.7rem; border-left: 3px solid transparent;
+    border-radius: 0 6px 6px 0; cursor: pointer;
+}}
+[data-testid="stSidebar"] [role="radiogroup"] label p {{ color: {MUTED}; font-size: 0.9rem; }}
+[data-testid="stSidebar"] [role="radiogroup"] label:hover {{ background: {CARD}; }}
+[data-testid="stSidebar"] [role="radiogroup"] label:hover p {{ color: {INK}; }}
+[data-testid="stSidebar"] [role="radiogroup"] label:has(input:checked) {{
+    background: {CARD}; border-left-color: {ACCENT};
+}}
+[data-testid="stSidebar"] [role="radiogroup"] label:has(input:checked) p {{ color: {INK}; font-weight: 600; }}
+/* Hide only the drawn circle; the real (visually hidden) radio input stays for keyboard/screen readers. */
+[data-testid="stSidebar"] [role="radiogroup"] label > div > div:first-child:not([data-testid]) {{ display: none; }}
+.vx-nav-title {{ color: {MUTED}; font-size: 0.72rem; letter-spacing: 0.06em; margin: 0.2rem 0 0.4rem 0.2rem; }}
+
+/* Cards: metrics, tables, charts, expanders, bordered containers, forms. */
 [data-testid="stMetric"] {{
-    border: 1px solid {RULE}; border-radius: 2px; padding: 0.55rem 0.8rem; background: #FFFFFF;
+    background: {CARD}; border: 1px solid {RULE}; border-radius: 8px; padding: 0.7rem 0.9rem;
 }}
-[data-testid="stMetricLabel"] p {{ color: {MUTED}; font-size: 0.8rem; }}
-[data-testid="stMetricValue"] {{ font-size: 1.4rem; font-weight: 600; color: {INK}; }}
-[data-testid="stDataFrame"], [data-testid="stTable"], [data-testid="stPlotlyChart"] {{
-    border: 1px solid {RULE}; border-radius: 2px;
+[data-testid="stMetricLabel"] p {{ color: {MUTED} !important; font-size: 0.8rem; }}
+[data-testid="stMetricValue"] {{ font-size: 1.45rem; font-weight: 600; color: {INK}; }}
+[data-testid="stMetricLabel"], [data-testid="stMetricLabel"] *, [data-testid="stMetricValue"],
+[data-testid="stMetricValue"] * {{ white-space: normal !important; overflow: visible !important;
+    text-overflow: clip !important; line-height: 1.25; }}
+[data-testid="stDataFrame"], [data-testid="stTable"] {{ border-radius: 8px; }}
+[data-testid="stPlotlyChart"] {{
+    background: {CARD}; border: 1px solid {RULE}; border-radius: 8px; overflow: hidden;
 }}
-[data-testid="stExpander"] details {{ border: 1px solid {RULE}; border-radius: 2px; }}
+[data-testid="stExpander"] details {{ background: {CARD}; border: 1px solid {RULE}; border-radius: 8px; }}
+[data-testid="stVerticalBlockBorderWrapper"]:has(> div > [data-testid="stVerticalBlock"]) {{ border-radius: 8px; }}
+[data-testid="stForm"] {{ border: none; padding: 0; }}
+[data-testid="stForm"] [data-testid="stVerticalBlockBorderWrapper"] {{ background: {CARD}; border-color: {RULE}; }}
 hr {{ border-color: {RULE} !important; }}
-.ctx {{
-    border: 1px solid {RULE}; border-left: 3px solid {DATA}; border-radius: 2px;
-    background: {PANEL}; padding: 0.55rem 0.85rem; margin-bottom: 1rem;
-    font-size: 0.86rem; line-height: 1.5; color: {INK};
+
+/* Brand bar and context banner. */
+.vx-brand {{
+    display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap;
+    background: {CARD}; border: 1px solid {RULE}; border-radius: 8px; padding: 0.75rem 1rem; margin-bottom: 0.7rem;
 }}
-.ctx strong {{ font-weight: 600; }}
-.reasons {{ margin: 0.2rem 0 0 0; padding-left: 1.1rem; font-size: 0.9rem; line-height: 1.6; }}
+.vx-brand-left {{ display: flex; align-items: center; gap: 0.7rem; }}
+.vx-brand-name {{ color: {INK}; font-size: 1.15rem; font-weight: 700; letter-spacing: -0.01em; }}
+.vx-brand-name span {{ color: {MUTED}; font-weight: 400; }}
+.vx-brand-tag {{ color: {MUTED}; font-size: 0.85rem; }}
+.ctx {{
+    width: 100%; box-sizing: border-box; background: {CARD}; border: 1px solid {RULE};
+    border-left: 3px solid {ACCENT}; border-radius: 8px; padding: 0.65rem 0.95rem; margin-bottom: 1.1rem;
+    color: {INK}; font-size: 0.86rem; line-height: 1.55; white-space: normal; overflow-wrap: anywhere;
+}}
+.ctx strong {{ font-weight: 600; color: {INK}; }}
+.ctx .muted {{ color: {MUTED}; }}
+
+/* Form section headers. */
+.vx-section {{
+    color: {INK}; font-weight: 600; font-size: 0.95rem; padding-bottom: 0.45rem; margin-bottom: 0.2rem;
+    border-bottom: 1px solid {RULE};
+}}
+
+/* Landing page. */
+.vx-hero {{ padding: 1.6rem 0 1.2rem 0; max-width: 860px; }}
+.vx-hero h1 {{ font-size: 2.3rem !important; line-height: 1.15; margin: 0 0 0.7rem 0; }}
+.vx-hero p {{ color: {BODY}; font-size: 1.02rem; line-height: 1.6; margin: 0; max-width: 72ch; }}
+.vx-tiles {{
+    display: grid; grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 0.75rem; margin: 0.4rem 0 1.4rem 0;
+}}
+.vx-tile {{ background: {CARD}; border: 1px solid {RULE}; border-radius: 8px; padding: 0.85rem 1rem; }}
+.vx-tile .v {{ color: {INK}; font-size: 1.55rem; font-weight: 600; }}
+.vx-tile .l {{ color: {MUTED}; font-size: 0.8rem; margin-top: 0.15rem; }}
+@media (max-width: 1100px) {{ .vx-tiles {{ grid-template-columns: repeat(2, minmax(0, 1fr)); }} }}
+.vx-grid {{
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 0.75rem; margin: 0.4rem 0 1rem 0;
+}}
+.vx-step {{ background: {CARD}; border: 1px solid {RULE}; border-radius: 8px; padding: 0.9rem 1rem; }}
+.vx-step .n {{ color: {POSITIVE}; font-size: 0.78rem; font-weight: 600; }}
+.vx-step .t {{ color: {INK}; font-weight: 600; margin: 0.15rem 0 0.35rem 0; }}
+.vx-step .d {{ color: {MUTED}; font-size: 0.86rem; line-height: 1.5; }}
+
+.reasons {{ margin: 0.2rem 0 0 0; padding-left: 1.1rem; font-size: 0.9rem; line-height: 1.65; }}
 .reasons .up {{ color: {INCREASES_RISK}; }}
 .reasons .down {{ color: {DECREASES_RISK}; }}
+@media (prefers-reduced-motion: reduce) {{ * {{ transition: none !important; }} }}
 </style>
 """
 
 PLOT_LAYOUT = dict(
-    font=dict(family=FONT_STACK, size=12, color=INK),
-    paper_bgcolor="#FFFFFF",
-    plot_bgcolor="#FFFFFF",
-    margin=dict(l=12, r=12, t=44, b=12),
+    font=dict(family=FONT_STACK, size=12, color=BODY),
+    paper_bgcolor=CARD,
+    plot_bgcolor=CARD,
+    margin=dict(l=14, r=14, t=46, b=14),
     title=dict(x=0.01, xanchor="left", font=dict(size=14, color=INK)),
-    xaxis=dict(gridcolor="#E6EAF0", linecolor=RULE, zeroline=False),
-    yaxis=dict(gridcolor="#E6EAF0", linecolor=RULE, zeroline=False),
-    legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0, title_text=""),
-    hoverlabel=dict(font_family=FONT_STACK),
+    xaxis=dict(gridcolor="#21262D", linecolor=RULE, zeroline=False, tickfont=dict(color=MUTED)),
+    yaxis=dict(gridcolor="#21262D", linecolor=RULE, zeroline=False, tickfont=dict(color=MUTED)),
+    legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0, title_text="",
+                font=dict(color=BODY)),
+    hoverlabel=dict(font_family=FONT_STACK, bgcolor=CANVAS, bordercolor=RULE, font_color=INK),
 )
 
 
@@ -146,14 +241,23 @@ def html_safe(text: str) -> str:
     return html.escape(str(text)).replace("$", "&#36;")
 
 
+def brand_bar() -> None:
+    st.html(
+        f'<div class="vx-brand"><div class="vx-brand-left">{LOGO_SVG}'
+        '<div class="vx-brand-name">ValidaX <span>| Autonomous Transaction Validation</span></div></div>'
+        '<div class="vx-brand-tag">Precision Risk Scoring. Zero Black-Box Decisions.</div></div>'
+    )
+
+
 def operational_context_banner() -> None:
     st.html(
         '<div class="ctx"><strong>FinTech / CSE303 (F20) · Transaction risk prioritization '
         "console.</strong> Scores rank transactions for investigator review: a high score "
         "indicates <strong>elevated risk warranting review, not a determination of fraud</strong>. "
-        f"Scenario assumptions: missed fraud &#36;{FALSE_NEGATIVE_COST:,}, false-positive review "
-        f"&#36;{FALSE_POSITIVE_COST:,}; review capacity {DAILY_REVIEW_CAPACITY:,} alerts/day. "
-        "Masked C/D/M/V/id_ columns appear with generic family labels only.</div>"
+        f"<span class=\"muted\">Scenario assumptions:</span> missed fraud &#36;{FALSE_NEGATIVE_COST:,}, "
+        f"false-positive review &#36;{FALSE_POSITIVE_COST:,}; review capacity "
+        f"{DAILY_REVIEW_CAPACITY:,} alerts/day. Masked C/D/M/V/id_ columns appear with generic family "
+        "labels only.</div>"
     )
 
 
@@ -571,13 +675,15 @@ def page_overview(scored: pd.DataFrame, summary: dict):
     for _, row in tiers.iterrows():
         ladder.add_trace(go.Bar(
             x=[row["transactions"]], y=[""], orientation="h", name=row["tier"],
-            marker=dict(color=RISK_COLORS[row["tier"]], line=dict(color="#FFFFFF", width=1)),
+            marker=dict(color=RISK_COLORS[row["tier"]], line=dict(color=CANVAS, width=2)),
             hovertemplate=(f"{row['tier']}: {row['transactions']:,.0f} transactions "
                            f"({row['share']:.1%}), observed fraud rate {row['fraud_rate']:.1%}<extra></extra>"),
         ))
-    styled(ladder, "Risk ladder: test-window transactions by tier", height=150, barmode="stack",
-           xaxis_title=None, yaxis=dict(showticklabels=False), margin=dict(l=12, r=12, t=44, b=8))
-    left, right = st.columns([3, 2])
+    styled(ladder, "Risk ladder: test-window transactions by tier", height=190, barmode="stack",
+           xaxis_title=None, yaxis=dict(showticklabels=False), margin=dict(l=14, r=14, t=46, b=10),
+           legend=dict(orientation="h", yanchor="top", y=-0.28, xanchor="left", x=0, title_text="",
+                       font=dict(color=BODY)))
+    left, right = st.columns([1, 1], gap="medium")
     left.plotly_chart(ladder, width="stretch")
     right.dataframe(
         tiers, hide_index=True, width="stretch",
@@ -586,7 +692,8 @@ def page_overview(scored: pd.DataFrame, summary: dict):
             "transactions": st.column_config.NumberColumn("Transactions", format="%d"),
             "frauds": st.column_config.NumberColumn("Frauds", format="%d"),
             "share": st.column_config.NumberColumn("Share", format="percent"),
-            "fraud_rate": st.column_config.NumberColumn("Observed fraud rate", format="percent"),
+            "fraud_rate": st.column_config.NumberColumn("Fraud rate", format="percent",
+                                                        help="Observed fraud rate in the tier"),
         },
     )
 
@@ -598,7 +705,9 @@ def page_overview(scored: pd.DataFrame, summary: dict):
         text=[f"{v:.1%}" for v in by_product["mean"]], textposition="outside",
         customdata=by_product["size"], hovertemplate="%{y}: %{x:.2%} of %{customdata:,} transactions<extra></extra>",
     ))
-    c1.plotly_chart(styled(fig, "Fraud rate by product code", xaxis_tickformat=".0%"), width="stretch")
+    fig.update_traces(cliponaxis=False)
+    c1.plotly_chart(styled(fig, "Fraud rate by product code", xaxis_tickformat=".0%",
+                           xaxis_range=[0, float(by_product["mean"].max()) * 1.18]), width="stretch")
 
     trend = scored.groupby("transaction_day")["isFraud"].agg(["sum", "size"]).reset_index()
     fig = go.Figure(go.Scatter(
@@ -893,7 +1002,7 @@ def page_threshold_simulator(scored: pd.DataFrame, summary: dict):
     st.subheader(f"Fixed capacity: {DAILY_REVIEW_CAPACITY:,} alerts per day")
     daily = load_output_csv("daily_capacity_simulation.csv")
     fig = go.Figure()
-    fig.add_trace(go.Bar(x=daily["day"], y=daily["fraud_in_day"], name="Frauds that day", marker_color=RULE))
+    fig.add_trace(go.Bar(x=daily["day"], y=daily["fraud_in_day"], name="Frauds that day", marker_color="#484F58"))
     fig.add_trace(go.Bar(x=daily["day"], y=daily["fraud_captured"], name="Caught within capacity",
                          marker_color=DATA))
     st.plotly_chart(styled(fig, "Daily fraud capture under a fixed review capacity", barmode="overlay",
@@ -908,12 +1017,12 @@ def page_threshold_simulator(scored: pd.DataFrame, summary: dict):
 # --------------------------------------------------------- classification --
 def verdict_banner(label: str, probability: float, threshold: float) -> None:
     fraud = label == inf.FRAUDULENT
-    color = RISK_COLORS["Critical"] if fraud else DATA
+    color = RISK_COLORS["Critical"] if fraud else POSITIVE
     meaning = ("flag for review: elevated risk, not a final determination of fraud" if fraud
                else "below the review threshold: no alert")
     st.html(
-        f'<div style="border:1px solid {RULE};border-left:4px solid {color};border-radius:2px;'
-        f'padding:0.8rem 1rem;margin:0.4rem 0 0.8rem 0;">'
+        f'<div style="background:{CARD};border:1px solid {RULE};border-left:4px solid {color};'
+        f'border-radius:8px;padding:0.9rem 1.1rem;margin:0.4rem 0 0.9rem 0;">'
         f'<div style="font-size:0.8rem;color:{MUTED};">Prediction</div>'
         f'<div style="font-size:1.6rem;font-weight:600;color:{color};">{html_safe(label)}</div>'
         f'<div style="font-size:0.88rem;color:{INK};">Fraud probability {probability:.4f} vs. threshold '
@@ -947,42 +1056,55 @@ def page_classify_transaction(main_summary: dict):
     def pick(options, preferred):
         return options.index(preferred) if preferred in options else 0
 
-    with st.form("classify_transaction"):
-        st.markdown("**Payment**")
-        c1, c2, c3, c4 = st.columns(4)
-        amount = c1.number_input("Amount (\\$)", min_value=0.01, value=117.00, step=1.0, format="%.2f")
-        product = c2.selectbox("Product code", cats["ProductCD"], index=pick(cats["ProductCD"], "W"))
-        card4 = c3.selectbox("Card network", cats["card4"], index=pick(cats["card4"], "visa"))
-        card6 = c4.selectbox("Card type", cats["card6"], index=pick(cats["card6"], "debit"))
+    def section(title: str) -> None:
+        st.html(f'<div class="vx-section">{html_safe(title)}</div>')
 
-        st.markdown("**Customer, device and time**")
-        c1, c2, c3, c4, c5 = st.columns(5)
-        none = "(not provided)"
-        p_email = c1.selectbox("Purchaser email domain", [none, *cats["P_emaildomain"]],
-                               index=pick([none, *cats["P_emaildomain"]], "gmail.com"))
-        r_email = c2.selectbox("Recipient email domain", [none, *cats["R_emaildomain"]])
-        device = c3.selectbox("Device type", ["(unknown)", *cats["DeviceType"]])
-        hour = c4.number_input("Hour of relative cycle (0-23)", min_value=0, max_value=23, value=14)
-        dow = c5.number_input("Day of relative 7-day cycle (0-6)", min_value=0, max_value=6, value=2)
+    defaults = meta.get("form_defaults", {})
+    none = "(not provided)"
+    with st.form("classify_transaction", border=False):
+        top_left, top_right = st.columns(2, gap="medium")
+        with top_left.container(border=True):
+            section("Payment")
+            c1, c2 = st.columns(2)
+            amount = c1.number_input("Amount (\\$)", min_value=0.01, value=117.00, step=1.0, format="%.2f")
+            product = c2.selectbox("Product code", cats["ProductCD"], index=pick(cats["ProductCD"], "W"))
+            c1, c2 = st.columns(2)
+            card4 = c1.selectbox("Card network", cats["card4"], index=pick(cats["card4"], "visa"))
+            card6 = c2.selectbox("Card type", cats["card6"], index=pick(cats["card6"], "debit"))
 
-        st.markdown("**Card history** (card1 key)")
-        first_seen = st.checkbox("First transaction seen for this card (history below is ignored)")
-        c1, c2, c3, c4 = st.columns(4)
-        prior = c1.number_input("Earlier transactions", min_value=0, value=12, step=1)
-        avg_prior = c2.number_input("Average past amount (\\$)", min_value=0.0, value=95.0, step=1.0)
-        max_prior = c3.number_input("Largest past amount (\\$)", min_value=0.0, value=300.0, step=1.0)
-        gap_hours = c4.number_input("Hours since last transaction", min_value=0.0, value=30.0, step=1.0)
+        with top_right.container(border=True):
+            section("Customer & Device")
+            c1, c2 = st.columns(2)
+            p_email = c1.selectbox("Purchaser email domain", [none, *cats["P_emaildomain"]],
+                                   index=pick([none, *cats["P_emaildomain"]], "gmail.com"))
+            r_email = c2.selectbox("Recipient email domain", [none, *cats["R_emaildomain"]])
+            c1, c2, c3 = st.columns(3)
+            device = c1.selectbox("Device type", ["(unknown)", *cats["DeviceType"]])
+            hour = c2.number_input("Hour (relative, 0-23)", min_value=0, max_value=23, value=14)
+            dow = c3.number_input("Day (relative, 0-6)", min_value=0, max_value=6, value=2)
 
-        defaults = meta.get("form_defaults", {})
-        st.markdown("**Billing address and distance codes**")
-        c1, c2, c3, c4 = st.columns(4)
-        addr1 = c1.number_input("addr1 (billing region code)", value=defaults.get("addr1"), step=1.0)
-        addr2 = c2.number_input("addr2 (billing country code)", value=defaults.get("addr2"), step=1.0)
-        dist1 = c3.number_input("dist1 (distance, optional)", value=None, step=1.0)
-        dist2 = c4.number_input("dist2 (distance, optional)", value=None, step=1.0)
-        st.caption("Address codes are prefilled with the most common values in the data. Clear them only if the "
-                   "address is really unknown: a missing billing address is itself a strong fraud signal "
-                   "(11.8% fraud vs. 2.5% when present). Distances are usually missing and can stay empty.")
+        bottom_left, bottom_right = st.columns(2, gap="medium")
+        with bottom_left.container(border=True):
+            section("Card History")
+            first_seen = st.checkbox("First transaction seen for this card (history below is ignored)")
+            c1, c2 = st.columns(2)
+            prior = c1.number_input("Earlier transactions", min_value=0, value=12, step=1)
+            avg_prior = c2.number_input("Average past amount (\\$)", min_value=0.0, value=95.0, step=1.0)
+            c1, c2 = st.columns(2)
+            max_prior = c1.number_input("Largest past amount (\\$)", min_value=0.0, value=300.0, step=1.0)
+            gap_hours = c2.number_input("Hours since last transaction", min_value=0.0, value=30.0, step=1.0)
+
+        with bottom_right.container(border=True):
+            section("Billing Address")
+            c1, c2 = st.columns(2)
+            addr1 = c1.number_input("addr1 (billing region code)", value=defaults.get("addr1"), step=1.0)
+            addr2 = c2.number_input("addr2 (billing country code)", value=defaults.get("addr2"), step=1.0)
+            c1, c2 = st.columns(2)
+            dist1 = c1.number_input("dist1 (distance, optional)", value=None, step=1.0)
+            dist2 = c2.number_input("dist2 (distance, optional)", value=None, step=1.0)
+            st.caption("Address codes are prefilled with the most common values in the data. Clear them only "
+                       "if the address is really unknown: a missing billing address is itself a strong fraud "
+                       "signal (11.8% fraud vs. 2.5% when present). Distances are usually missing.")
         submitted = st.form_submit_button("Classify transaction", type="primary")
 
     if not submitted:
@@ -1159,17 +1281,92 @@ def page_batch_classification(bundle: dict):
     st.download_button("Download results (CSV)", shown.to_csv(index=False), "validax_predictions.csv", "text/csv")
 
 
+# ----------------------------------------------------------------- landing --
+def go_to(page: str) -> None:
+    """Button callback: switch the sidebar navigation before the next run."""
+    st.session_state["nav"] = page
+
+
+def page_landing(scored: pd.DataFrame, summary: dict) -> None:
+    rows = int(summary.get("train_rows", 0)) + int(summary.get("test_rows", 0))
+    threshold = float(summary.get("cost_optimal_threshold", 0.5))
+    curve = load_output_csv("cost_sensitive_threshold.csv")
+    at_threshold = curve.loc[(curve["threshold"] - threshold).abs().idxmin()]
+    daily = load_output_csv("daily_capacity_simulation.csv")
+    pr_auc = summary["xgboost"]["pr_auc"]
+    baseline_pr = summary["logreg"]["pr_auc"]
+    no_skill = float(scored["isFraud"].mean())
+    comparison, _ = load_optional_csv("model_comparison.csv")
+    ladder = (f"the strongest of {len(comparison)} models compared" if comparison is not None
+              else "the strongest model compared")
+
+    st.html(
+        '<div class="vx-hero"><h1>Classify every e-commerce transaction as fraudulent or legitimate, '
+        'and show why.</h1>'
+        "<p>ValidaX scores each payment with a gradient-boosted model trained on "
+        f"{rows:,} real IEEE-CIS transactions, flags the ones above a cost-optimal threshold for "
+        "investigator review, and explains every decision with plain-language reason codes. Masked "
+        "provider fields are only ever shown by family, never interpreted.</p></div>"
+    )
+
+    c1, c2, c3, _ = st.columns([1.1, 1, 1, 2.2])
+    c1.button("Open investigation portal", type="primary", on_click=go_to, args=("Transaction investigation",),
+              width="stretch")
+    c2.button("Classify a transaction", on_click=go_to, args=("Classify a transaction",), width="stretch")
+    c3.button("Upload a batch", on_click=go_to, args=("Batch classification",), width="stretch")
+
+    tiles = [
+        (f"{rows:,}", "labeled transactions (IEEE-CIS)"),
+        (f"{threshold:.2f}", "cost-optimal decision threshold"),
+        (f"&#36;{at_threshold['total_cost']:,.0f}", "scenario cost at that threshold"),
+        (f"{pr_auc:.3f}", f"PR-AUC ({pr_auc / no_skill:.0f}x the {no_skill:.3f} no-skill baseline)"),
+        (f"{daily['recall'].mean():.1%}", f"fraud caught at {DAILY_REVIEW_CAPACITY:,} reviews/day"),
+    ]
+    st.html('<div class="vx-tiles">' + "".join(
+        f'<div class="vx-tile"><div class="v">{v}</div><div class="l">{html_safe(label)}</div></div>'
+        for v, label in tiles) + "</div>")
+
+    st.subheader("How ValidaX decides")
+    steps = [
+        ("Data", f"{rows:,} labeled transactions joined with identity signals, split by time: the model is "
+                 f"tested only on the most recent {int(summary.get('test_rows', 0)):,}."),
+        ("Features", "451 inputs: documented fields, point-in-time card velocity (earlier transactions only) and "
+                     "masked C/D/M/V/id_ families used as opaque signals."),
+        ("Model", f"XGBoost with class weighting: PR-AUC {pr_auc:.3f} against {baseline_pr:.3f} for the "
+                  f"logistic baseline, {ladder}."),
+        ("Decision", f"Fraudulent if the score is at least {threshold:.2f}: the threshold that minimises "
+                     f"cost when a missed fraud costs &#36;{FALSE_NEGATIVE_COST:,} and a review "
+                     f"&#36;{FALSE_POSITIVE_COST:,}, under a {DAILY_REVIEW_CAPACITY:,}/day review cap."),
+        ("Explanation", "TreeSHAP reason codes for every alert. Documented fields get plain labels; masked "
+                        "columns keep generic family labels with no values shown."),
+        ("Delivery", "This Streamlit app, a read-only Docker image and CI. Single-transaction form, CSV batch "
+                     "upload and an investigation console."),
+    ]
+    st.html('<div class="vx-grid">' + "".join(
+        f'<div class="vx-step"><div class="n">{i:02d}</div><div class="t">{title}</div>'
+        f'<div class="d">{text}</div></div>' for i, (title, text) in enumerate(steps, 1)) + "</div>")
+    st.caption("Every Fraudulent label means elevated risk warranting human review, not an automated "
+               "determination of fraud. Costs and capacity are scenario assumptions.")
+
+
 # --------------------------------------------------------------------- main --
 def main():
     st.html(STYLE)
-    st.sidebar.title("Risk operations")
-    page = st.sidebar.radio("Page", PAGES, label_visibility="collapsed")
+    if "nav" not in st.session_state:  # deep links: ?page=investigate
+        slug = st.query_params.get("page")
+        st.session_state["nav"] = next((p for p, s in PAGE_SLUGS.items() if s == slug), LANDING)
+    st.sidebar.html(f'<div class="vx-brand-left" style="margin:0.2rem 0 0.9rem 0.1rem;">{LOGO_SVG}'
+                    '<div class="vx-brand-name">ValidaX</div></div>'
+                    '<div class="vx-nav-title">NAVIGATION</div>')
+    page = st.sidebar.radio("Navigate", PAGES, key="nav", label_visibility="collapsed")
+    st.query_params["page"] = PAGE_SLUGS[page]
     st.sidebar.divider()
     st.sidebar.caption(
         "Data: IEEE-CIS Fraud Detection (Kaggle, Vesta Corporation). Real anonymized "
         "transactions; masked fields carry family labels only."
     )
 
+    brand_bar()
     operational_context_banner()
 
     missing = missing_core_outputs()
@@ -1184,7 +1381,9 @@ def main():
 
     scored, summary = load_scored(), load_summary()
 
-    if page == "Classify a transaction":
+    if page == LANDING:
+        page_landing(scored, summary)
+    elif page == "Classify a transaction":
         page_classify_transaction(summary)
     elif page == "Batch classification":
         bundle = get_main_bundle()
