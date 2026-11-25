@@ -2,12 +2,13 @@
 #
 # Fraud risk operations console (Streamlit) for the IEEE-CIS fraud model.
 #
-# The image contains the app code, src/, the trained bundle (app/model.pkl) and the
-# result files in outputs/, all read-only. The Kaggle-derived feature table is NOT
+# The image contains the app code, src/, the trained bundle (app/model.pkl), the
+# result files in outputs/ and the inference artifacts in artifacts/ (form model,
+# category lists, card history), all read-only. The Kaggle-derived feature table is NOT
 # baked in. Mount data/processed/ read-only at runtime to enable live SHAP
 # explanations on the Transaction investigation page.
 #
-# Build:  docker build -t fraud-console .
+# Build:  docker build -t validax-console .
 # Run:    see README.md, "Deployment"
 
 FROM python:3.13-slim
@@ -37,6 +38,7 @@ RUN pip install -r requirements-app.txt
 COPY src/ src/
 COPY app/ app/
 COPY outputs/ outputs/
+COPY artifacts/ artifacts/
 COPY scripts/run_app.sh scripts/run_app.sh
 
 # Normalise line endings (the script may be checked out on Windows), create the
@@ -46,7 +48,7 @@ RUN sed -i 's/\r$//' scripts/run_app.sh \
     && chmod 0555 scripts/run_app.sh \
     && mkdir -p data/processed \
     && useradd --create-home --uid 10001 appuser \
-    && chmod -R a-w app outputs src
+    && chmod -R a-w app outputs artifacts src
 
 USER appuser
 

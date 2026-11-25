@@ -3,7 +3,7 @@ PYTHON ?= python
 IMAGE  ?= validax-console
 PORT   ?= 8501
 
-.PHONY: help install install-dev lint test pipeline app sql docker-build docker-run docker-stop
+.PHONY: help install install-dev lint test pipeline artifacts app sql docker-build docker-run docker-stop
 
 help:
 	@echo "install       install the pinned project environment (requirements.txt)"
@@ -11,6 +11,7 @@ help:
 	@echo "lint          run ruff on src/, app/ and tests/"
 	@echo "test          run the unit and smoke tests"
 	@echo "pipeline      rebuild data/processed, outputs/ and app/model.pkl from data/raw (overwrites results)"
+	@echo "artifacts     rebuild artifacts/ (inference metadata, card history, form model) from data/processed"
 	@echo "app           start the Streamlit console on port $(PORT)"
 	@echo "sql           run sql/fraud_analysis.sql in DuckDB"
 	@echo "docker-build  build the container image"
@@ -34,6 +35,10 @@ pipeline:
 	$(PYTHON) src/features.py
 	$(PYTHON) src/model.py
 	$(PYTHON) src/scoring.py
+
+artifacts:
+	$(PYTHON) src/inference.py
+	$(PYTHON) src/interpretable_model.py --overwrite
 
 app:
 	PORT=$(PORT) PYTHON=$(PYTHON) ./scripts/run_app.sh
