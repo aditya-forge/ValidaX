@@ -40,6 +40,7 @@ COPY app/ app/
 COPY outputs/ outputs/
 COPY artifacts/ artifacts/
 COPY scripts/run_app.sh scripts/run_app.sh
+COPY .streamlit/config.toml .streamlit/config.toml
 
 # Normalise line endings (the script may be checked out on Windows), create the
 # mount point for the optional feature table, and make the artifacts read-only
