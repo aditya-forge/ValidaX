@@ -1,0 +1,28 @@
+# ValidaX dark theme. Streamlit renders widgets, menus and data tables from these
+# values, so the whole app stays dark with no light-theme fallbacks.
+[theme]
+base = "dark"
+primaryColor = "#238636"
+backgroundColor = "#0E1117"
+secondaryBackgroundColor = "#161B22"
+textColor = "#F0F6FC"
+linkColor = "#58A6FF"
+borderColor = "#30363D"
+dataframeBorderColor = "#30363D"
+dataframeHeaderBackgroundColor = "#161B22"
+showWidgetBorder = true
+baseRadius = "8px"
+buttonRadius = "6px"
+font = "sans-serif"
+codeBackgroundColor = "#161B22"
+chartCategoricalColors = ["#58A6FF", "#3FB950", "#D29922", "#F85149", "#A371F7", "#8B949E"]
+
+[theme.sidebar]
+backgroundColor = "#0E1117"
+secondaryBackgroundColor = "#161B22"
+textColor = "#F0F6FC"
+borderColor = "#30363D"
+showSidebarBorder = true
+
+[browser]
+gatherUsageStats = false
