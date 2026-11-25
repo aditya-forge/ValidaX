@@ -136,7 +136,8 @@ STYLE = f"""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap');
 .stApp {{ font-family: {FONT_STACK}; background: {CANVAS}; color: {INK}; font-variant-numeric: tabular-nums; }}
-.block-container {{ padding-top: 1rem; max-width: 1440px; }}
+/* Streamlit Community Cloud adds a fixed host bar above the app content. */
+.block-container {{ padding-top: 5.5rem; max-width: 1440px; }}
 h1 {{ font-size: 1.55rem !important; font-weight: 600 !important; letter-spacing: -0.01em; color: {INK} !important; }}
 h2 {{ font-size: 1.12rem !important; font-weight: 600 !important; color: {INK} !important; }}
 h3 {{ font-size: 1rem !important; font-weight: 600 !important; color: {INK} !important; }}
@@ -145,8 +146,8 @@ h3 {{ font-size: 1rem !important; font-weight: 600 !important; color: {INK} !imp
     opacity: 1 !important; }}
 [data-testid="stWidgetLabel"] p {{ color: {INK} !important; font-weight: 500; font-size: 0.85rem; }}
 
-/* Top bar: flat, ruled, no shadow. */
-[data-testid="stHeader"] {{ background: {CANVAS}; border-bottom: 1px solid {RULE}; box-shadow: none; }}
+/* Hide Streamlit's empty native bar; the branded row below is the app header. */
+[data-testid="stHeader"] {{ display: none !important; }}
 [data-testid="stSidebar"], [data-testid="stSidebarCollapsedControl"] {{ display: none; }}
 /* Native navigation is replaced by the compact branded navigation row below. */
 [data-testid="stTopNav"], [data-testid="stNavigation"] {{ display: none !important; }}
