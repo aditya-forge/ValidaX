@@ -82,15 +82,17 @@ st.set_page_config(page_title="ValidaX | Payment Fraud Intelligence",
 # switch without a rerun. .streamlit/config.toml holds the same values for native
 # widgets and tables ([theme.light] and [theme.dark]).
 PALETTE = {  # token: (light, dark)
-    "canvas": ("#F8FAFC", "#0A0E17"),
-    "surface": ("#FFFFFF", "#111726"),
-    "rule": ("#E2E8F0", "#1E293B"),
-    "ink": ("#0F172A", "#F8FAFC"),
-    "body": ("#334155", "#CBD5E1"),
-    "muted": ("#64748B", "#94A3B8"),
-    "accent": ("#0284C7", "#38BDF8"),
-    "accent_hover": ("#0369A1", "#7DD3FC"),
-    "on_accent": ("#FFFFFF", "#0A0E17"),
+    "canvas": ("#F8FAFC", "#202124"),       # dark: neutral grey, same family as the browser tab strip
+    "surface": ("#FFFFFF", "#292A2D"),
+    "rule": ("#E2E8F0", "#3C4043"),
+    "ink": ("#0F172A", "#E8EAED"),
+    "body": ("#334155", "#BDC1C6"),
+    "muted": ("#64748B", "#9AA0A6"),
+    "accent": ("#1F6FEB", "#4C8DF6"),       # brand blue for text, indicators, focus
+    "accent_hover": ("#1A5FCC", "#6BA1F8"),
+    "button": ("#1F6FEB", "#2F6FE0"),       # primary button fill: white text stays above 4.5:1
+    "button_hover": ("#1A5FCC", "#3B7CF0"),
+    "on_accent": ("#FFFFFF", "#FFFFFF"),
     "flag": ("#E11D48", "#F43F5E"),
     "clear": ("#15803D", "#22C55E"),
 }
@@ -104,13 +106,15 @@ def ld(token: str) -> str:
 CANVAS, CARD, RULE = ld("canvas"), ld("surface"), ld("rule")
 INK, BODY, MUTED = ld("ink"), ld("body"), ld("muted")
 ACCENT, ACCENT_HOVER, ON_ACCENT = ld("accent"), ld("accent_hover"), ld("on_accent")
+BUTTON, BUTTON_HOVER = ld("button"), ld("button_hover")
 FLAG, CLEAR = ld("flag"), ld("clear")
 RADIUS = "4px"
 
 # Chart marks are drawn by Plotly, which cannot read CSS, so they use mid-tones that
 # hold contrast on both canvases. Fonts, grids and hover labels come from Streamlit's
 # Plotly theme, which tracks the active theme in the browser.
-TRACE = "#0EA5E9"
+BRAND = "#2F81F7"  # logo and favicon shield; the same in both themes
+TRACE = "#3B82F6"
 NEUTRAL = "#64748B"
 FAINT = "rgba(100, 116, 139, 0.35)"
 RISK_COLORS = {"Critical": "#F43F5E", "High": "#F97316", "Medium": "#EAB308", "Low": "#64748B"}
@@ -119,21 +123,13 @@ FONT_STACK = "'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', Roboto, san
 MONO_STACK = "'IBM Plex Mono', ui-monospace, SFMono-Regular, Consolas, monospace"
 
 
-# Logo: shield gate with a geometric X. st.html strips inline <svg>, so each colour
-# layer is an SVG mask filled by a light-dark() background: frame and one stroke take
-# the ink colour, the other stroke the accent. Both flip with the theme.
-def _svg_mask(body: str) -> str:
-    svg = f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="3 4 30 34" fill="none" stroke="#000">{body}</svg>'
-    return f'url("data:image/svg+xml;base64,{base64.b64encode(svg.encode()).decode()}")'
-
-
-LOGO_FRAME_MASK = _svg_mask(
-    '<path d="M4 5 H32 V20 C32 29.5 25.5 34.5 18 37 C10.5 34.5 4 29.5 4 20 V5 Z" stroke-width="2" '
-    'stroke-linejoin="miter"/><line x1="25" y1="12" x2="11" y2="28" stroke-width="2.2" stroke-linecap="square"/>'
-)
-LOGO_CUT_MASK = _svg_mask('<line x1="11" y1="12" x2="25" y2="28" stroke-width="2.2" stroke-linecap="square"/>')
-LOGO_HTML = ('<span class="vx-logo" role="img" aria-label="ValidaX"><span class="vx-shield">'
-             '<i class="frame"></i><i class="cut"></i></span>'
+# Logo: solid blue shield with a white geometric X (also app/assets/validax-icon.svg,
+# the favicon). Fixed colours read on both canvases, so it is one image; st.html strips
+# inline <svg>. The wordmark is text and follows the theme.
+LOGO_MARK_PATH = Path(__file__).resolve().parent / "assets" / "validax-icon.svg"
+LOGO_HTML = ('<span class="vx-logo" role="img" aria-label="ValidaX">'
+             '<img class="vx-shield" alt="" src="data:image/svg+xml;base64,'
+             + base64.b64encode(LOGO_MARK_PATH.read_bytes()).decode() + '">'
              '<span class="vx-word" aria-hidden="true">Valida<b>X</b></span></span>')
 
 STYLE = f"""
@@ -163,11 +159,11 @@ h3 {{ font-size: 1rem !important; font-weight: 600 !important; color: {INK} !imp
 
 /* Native buttons: rectangular; primary is the accent with contrasting text. */
 [data-testid="stBaseButton-primary"], [data-testid="stBaseButton-primaryFormSubmit"] {{
-    background: {ACCENT} !important; border: 1px solid {ACCENT} !important; color: {ON_ACCENT} !important; }}
+    background: {BUTTON} !important; border: 1px solid {BUTTON} !important; color: {ON_ACCENT} !important; }}
 [data-testid="stBaseButton-primary"] p, [data-testid="stBaseButton-primaryFormSubmit"] p {{
     color: {ON_ACCENT} !important; font-weight: 600; }}
 [data-testid="stBaseButton-primary"]:hover, [data-testid="stBaseButton-primaryFormSubmit"]:hover {{
-    background: {ACCENT_HOVER} !important; border-color: {ACCENT_HOVER} !important; }}
+    background: {BUTTON_HOVER} !important; border-color: {BUTTON_HOVER} !important; }}
 [data-testid="stBaseButton-secondary"] {{ background: {CARD}; border: 1px solid {RULE}; }}
 [data-testid="stBaseButton-secondary"]:hover {{ border-color: {ACCENT}; color: {INK}; }}
 .stApp a:focus-visible, .stApp button:focus-visible {{ outline: 2px solid {ACCENT}; outline-offset: 2px; }}
@@ -200,11 +196,7 @@ hr {{ border-color: {RULE} !important; }}
 .st-key-vx_brand {{ border-bottom: 1px solid {RULE}; padding-bottom: 0.75rem; margin-bottom: 0.4rem; }}
 .vx-mark {{ display: flex; align-items: center; gap: 0.75rem; }}
 .vx-logo {{ display: inline-flex; align-items: center; gap: 0.5rem; }}
-.vx-shield {{ position: relative; width: 26px; height: 30px; flex: none; }}
-.vx-shield i {{ position: absolute; inset: 0; -webkit-mask: var(--m) center / contain no-repeat;
-    mask: var(--m) center / contain no-repeat; }}
-.vx-shield .frame {{ --m: {LOGO_FRAME_MASK}; background: {INK}; }}
-.vx-shield .cut {{ --m: {LOGO_CUT_MASK}; background: {ACCENT}; }}
+.vx-shield {{ display: block; width: 28px; height: 32px; flex: none; }}
 .vx-word {{ color: {INK}; font-size: 1.2rem; font-weight: 600; letter-spacing: -0.02em; line-height: 1; }}
 .vx-word b {{ color: {ACCENT}; font-weight: 600; }}
 .vx-mark .desc {{ color: {MUTED}; font-size: 0.85rem; padding-left: 0.75rem; border-left: 1px solid {RULE}; }}
@@ -264,8 +256,8 @@ hr {{ border-color: {RULE} !important; }}
 .vx-btn {{ display: inline-block; padding: 0.5rem 1rem; border-radius: {RADIUS}; font-size: 0.88rem; font-weight: 500;
     text-decoration: none !important; border: 1px solid {RULE}; color: {INK} !important; background: {CARD}; }}
 .vx-btn:hover {{ border-color: {ACCENT}; }}
-.vx-btn.primary {{ background: {ACCENT}; border-color: {ACCENT}; color: {ON_ACCENT} !important; font-weight: 600; }}
-.vx-btn.primary:hover {{ background: {ACCENT_HOVER}; border-color: {ACCENT_HOVER}; }}
+.vx-btn.primary {{ background: {BUTTON}; border-color: {BUTTON}; color: {ON_ACCENT} !important; font-weight: 600; }}
+.vx-btn.primary:hover {{ background: {BUTTON_HOVER}; border-color: {BUTTON_HOVER}; }}
 
 /* Form section headers. */
 .vx-section {{ color: {INK}; font-weight: 600; font-size: 0.92rem; padding-bottom: 0.45rem; margin-bottom: 0.2rem;
@@ -365,7 +357,7 @@ setInterval(paint, 800);
 
 
 def theme_switch_html() -> str:
-    raise_ = {"Light": "#F1F5F9", "Dark": "#1E293B"}  # active button surface
+    raise_ = {"Light": "#F1F5F9", "Dark": "#35363A"}  # active button surface
     colors = {name: {"surface": PALETTE["surface"][i], "rule": PALETTE["rule"][i], "muted": PALETTE["muted"][i],
                      "ink": PALETTE["ink"][i], "accent": PALETTE["accent"][i], "raise": raise_[name]}
               for i, name in enumerate(("Light", "Dark"))}

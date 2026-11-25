@@ -119,8 +119,8 @@ def test_presets_classify_in_one_click(preset, decision):
 def test_both_themes_share_one_stylesheet(console):
     """Every custom colour is a light-dark() pair; no hard-coded hex outside the token table."""
     import re
-    assert console.PALETTE["canvas"] == ("#F8FAFC", "#0A0E17")
-    assert console.PALETTE["accent"] == ("#0284C7", "#38BDF8")
+    assert console.PALETTE["canvas"] == ("#F8FAFC", "#202124")
+    assert console.PALETTE["accent"] == ("#1F6FEB", "#4C8DF6")
     css = re.sub(r'url\("data:[^)]*\)', "", console.STYLE)
     assert "light-dark(" in css
     assert not re.findall(r"#[0-9A-Fa-f]{6}", re.sub(r"light-dark\([^)]*\)", "", css))
