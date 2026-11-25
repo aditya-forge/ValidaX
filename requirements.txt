@@ -1,0 +1,14 @@
+# Full project environment (Python 3.13): app runtime, pipeline/SQL tools and notebooks.
+# Pinned to the versions this project was verified with.
+
+# Streamlit console + src/ pipeline (also used on its own by the Docker image)
+-r requirements-app.txt
+
+# SQL analysis (fraud_analysis.sql)
+duckdb==2.0.1
+
+# Notebooks: run headless with `jupyter nbconvert --execute`, or open in VS Code / Jupyter.
+# (JupyterLab itself is optional; on Windows it may need long-path support to install.)
+nbformat==5.11.1
+nbconvert==7.17.2
+ipykernel==7.4.0
