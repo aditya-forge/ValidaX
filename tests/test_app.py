@@ -42,7 +42,7 @@ def test_classification_table_counts(console):
 
 
 @pytest.mark.skipif(not (REPO / "outputs" / "scored_transactions.csv").exists(), reason="outputs/ not present")
-@pytest.mark.parametrize("page", ["Classify a transaction", "Batch classification", "Fraud overview",
+@pytest.mark.parametrize("page", ["ValidaX Landing", "Classify a transaction", "Batch classification", "Fraud overview",
                                   "Alert queue", "Threshold simulator"])
 def test_pages_render_without_errors(page):
     before = {p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in PROTECTED}
@@ -65,3 +65,12 @@ def test_classify_form_submits_and_predicts():
     assert ("Fraudulent" in verdict) or ("Legitimate" in verdict)
     reasons = next(h.proto.body for h in at.get("html") if 'class="reasons"' in h.proto.body)
     assert reasons.count("<li") == 5
+
+
+def test_landing_buttons_switch_page():
+    at = AppTest.from_file(str(REPO / "app" / "app.py"), default_timeout=300).run()
+    assert at.sidebar.radio[0].value == "ValidaX Landing"
+    assert any("vx-tile" in h.proto.body for h in at.get("html"))
+    at.button[0].click().run()
+    assert at.sidebar.radio[0].value == "Transaction investigation"
+    assert not at.exception, [e.message for e in at.exception]
