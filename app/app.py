@@ -82,12 +82,12 @@ st.set_page_config(page_title="ValidaX | Payment Fraud Intelligence",
 # switch without a rerun. .streamlit/config.toml holds the same values for native
 # widgets and tables ([theme.light] and [theme.dark]).
 PALETTE = {  # token: (light, dark)
-    "canvas": ("#F8FAFC", "#202124"),       # dark: neutral grey, same family as the browser tab strip
-    "surface": ("#FFFFFF", "#292A2D"),
-    "rule": ("#E2E8F0", "#3C4043"),
-    "ink": ("#0F172A", "#E8EAED"),
-    "body": ("#334155", "#BDC1C6"),
-    "muted": ("#64748B", "#9AA0A6"),
+    "canvas": ("#F8FAFC", "#050608"),       # near-black canvas from the reference
+    "surface": ("#FFFFFF", "#0D1016"),
+    "rule": ("#E2E8F0", "#242833"),
+    "ink": ("#0F172A", "#E8EDF5"),
+    "body": ("#334155", "#B5C0D0"),
+    "muted": ("#64748B", "#8D9AAF"),
     "accent": ("#1F6FEB", "#4C8DF6"),       # brand blue for text, indicators, focus
     "accent_hover": ("#1A5FCC", "#6BA1F8"),
     "button": ("#1F6FEB", "#2F6FE0"),       # primary button fill: white text stays above 4.5:1
@@ -136,7 +136,7 @@ STYLE = f"""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap');
 .stApp {{ font-family: {FONT_STACK}; background: {CANVAS}; color: {INK}; font-variant-numeric: tabular-nums; }}
-.block-container {{ padding-top: 4.6rem; max-width: 1440px; }}
+.block-container {{ padding-top: 1rem; max-width: 1440px; }}
 h1 {{ font-size: 1.55rem !important; font-weight: 600 !important; letter-spacing: -0.01em; color: {INK} !important; }}
 h2 {{ font-size: 1.12rem !important; font-weight: 600 !important; color: {INK} !important; }}
 h3 {{ font-size: 1rem !important; font-weight: 600 !important; color: {INK} !important; }}
@@ -148,7 +148,8 @@ h3 {{ font-size: 1rem !important; font-weight: 600 !important; color: {INK} !imp
 /* Top bar: flat, ruled, no shadow. */
 [data-testid="stHeader"] {{ background: {CANVAS}; border-bottom: 1px solid {RULE}; box-shadow: none; }}
 [data-testid="stSidebar"], [data-testid="stSidebarCollapsedControl"] {{ display: none; }}
-/* Top nav: flat links; the active page gets a 2px accent underline, not a filled chip. */
+/* Native navigation is replaced by the compact branded navigation row below. */
+[data-testid="stTopNav"], [data-testid="stNavigation"] {{ display: none !important; }}
 [data-testid="stTopNavLink"] {{ background: transparent !important; border-radius: 0 !important;
     border-bottom: 2px solid transparent; }}
 [data-testid="stTopNavLink"] p {{ color: {MUTED} !important; font-weight: 500; }}
@@ -193,18 +194,24 @@ h3 {{ font-size: 1rem !important; font-weight: 600 !important; color: {INK} !imp
 hr {{ border-color: {RULE} !important; }}
 
 /* Brand row: logo, product line, status badge, theme switch. */
-.st-key-vx_brand {{ border-bottom: 1px solid {RULE}; padding-bottom: 0.75rem; margin-bottom: 0.4rem; }}
+.st-key-vx_brand {{ border-bottom: 1px solid {RULE}; padding: 0.55rem 0; margin: 0 0 1.35rem 0;
+    background: {CANVAS}; }}
 .vx-mark {{ display: flex; align-items: center; gap: 0.75rem; }}
 .vx-logo {{ display: inline-flex; align-items: center; gap: 0.5rem; }}
-.vx-shield {{ display: block; width: 28px; height: 32px; flex: none; }}
+.vx-shield {{ display: block; width: 32px; height: 32px; flex: none; }}
 .vx-word {{ color: {INK}; font-size: 1.2rem; font-weight: 600; letter-spacing: -0.02em; line-height: 1; }}
 .vx-word b {{ color: {ACCENT}; font-weight: 600; }}
-.vx-mark .desc {{ color: {MUTED}; font-size: 0.85rem; padding-left: 0.75rem; border-left: 1px solid {RULE}; }}
-.vx-status-row {{ display: flex; justify-content: flex-end; }}
-.vx-status {{ color: {BODY}; font-size: 0.8rem; border: 1px solid {RULE}; border-left: 2px solid {ACCENT};
-    border-radius: {RADIUS}; padding: 0.28rem 0.6rem; background: {CARD}; white-space: nowrap; }}
-.vx-status .dot {{ color: {ACCENT}; }}
-.vx-status .sep {{ color: {MUTED}; padding: 0 0.3rem; }}
+.vx-mark .desc {{ display: none; }}
+.vx-header-nav {{ display: flex; align-items: center; justify-content: center; gap: clamp(0.7rem, 2vw, 2rem); }}
+.vx-header-nav a {{ color: {MUTED}; text-decoration: none; font-size: 0.88rem; font-weight: 500;
+    padding: 0.85rem 0 0.72rem; border-bottom: 2px solid transparent; white-space: nowrap; }}
+.vx-header-nav a:hover, .vx-header-nav a[aria-current="page"] {{ color: {INK}; }}
+.vx-header-nav a[aria-current="page"] {{ border-bottom-color: {ACCENT}; }}
+.vx-header-actions {{ display: flex; align-items: center; justify-content: flex-end; gap: 0.75rem; }}
+.vx-header-launch {{ display: inline-flex; align-items: center; justify-content: center; padding: 0.58rem 0.9rem;
+    background: {BUTTON}; border: 1px solid {BUTTON}; color: {ON_ACCENT} !important; text-decoration: none;
+    font-size: 0.84rem; font-weight: 600; white-space: nowrap; border-radius: {RADIUS}; }}
+.vx-header-launch:hover {{ background: {BUTTON_HOVER}; border-color: {BUTTON_HOVER}; }}
 
 /* Overview: title lockup, command callout, context box, telemetry strip. */
 .vx-lockup h1 {{ font-size: 1.9rem !important; line-height: 1.2; margin: 0.2rem 0 0.5rem 0; }}
@@ -239,6 +246,10 @@ hr {{ border-color: {RULE} !important; }}
 .vx-cell .v {{ color: {INK}; font-size: 1.35rem; font-weight: 600; margin-top: 0.15rem; }}
 .vx-cell .s {{ color: {MUTED}; font-size: 0.74rem; margin-top: 0.1rem; }}
 @media (max-width: 1100px) {{ .vx-strip {{ grid-template-columns: repeat(2, minmax(0, 1fr)); }} }}
+@media (max-width: 850px) {{ .vx-header-nav {{ gap: 0.55rem; }} .vx-header-nav a {{ font-size: 0.78rem; }}
+    .vx-header-launch {{ display: none; }} }}
+@media (max-width: 650px) {{ .vx-header-nav {{ overflow-x: auto; justify-content: flex-start; }}
+    .st-key-vx_brand [data-testid="stHorizontalBlock"] {{ flex-wrap: wrap; gap: 0.3rem; }} }}
 
 /* Classification result: decision first. */
 .vx-result {{ display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1px; background: {RULE};
@@ -357,7 +368,7 @@ setInterval(paint, 800);
 
 
 def theme_switch_html() -> str:
-    raise_ = {"Light": "#F1F5F9", "Dark": "#35363A"}  # active button surface
+    raise_ = {"Light": "#F1F5F9", "Dark": "#191D26"}  # active button surface
     colors = {name: {"surface": PALETTE["surface"][i], "rule": PALETTE["rule"][i], "muted": PALETTE["muted"][i],
                      "ink": PALETTE["ink"][i], "accent": PALETTE["accent"][i], "raise": raise_[name]}
               for i, name in enumerate(("Light", "Dark"))}
@@ -365,19 +376,25 @@ def theme_switch_html() -> str:
             .replace("__PAGES__", json.dumps([path for _, _, path in NAV_PAGES])))
 
 
-def brand_header(threshold: float) -> None:
-    """Logo and product line on the left; live status badge and theme switch on the right."""
+def brand_header() -> None:
+    """Compact branded navigation row matching the reference header layout."""
     with st.container(key="vx_brand"):
-        left, right = st.columns([3, 2], vertical_alignment="center")
-        left.html(f'<div class="vx-mark">{LOGO_HTML}<span class="desc">Payment Fraud Intelligence</span></div>')
-        status, switch = right.columns([5, 1], vertical_alignment="center")
-        status.html(
-            f'<div class="vx-status-row"><div class="vx-status"><span class="dot">●</span> Active'
-            f'<span class="sep">·</span>Threshold {threshold:.2f}<span class="sep">·</span>'
-            f'{DAILY_REVIEW_CAPACITY:,}/day cap</div></div>'
-        )
-        with switch:
-            st.iframe(theme_switch_html(), height=34, alt="Theme switch: light or dark")
+        left, middle, right = st.columns([2.2, 5.2, 2.4], vertical_alignment="center")
+        left.html(f'<div class="vx-mark">{LOGO_HTML}</div>')
+        nav_html = '<nav class="vx-header-nav" aria-label="Main navigation">' + "".join(
+            f'<a href="./{path}" data-page="{path}">{title}</a>' for title, _, path in NAV_PAGES
+        ) + '</nav><script>\n'
+        nav_html += """const p = window.parent.location.pathname.replace(/\\/$/, '').split('/').pop();
+document.querySelectorAll('.vx-header-nav a').forEach(a => {
+  if ((p || 'overview') === a.dataset.page) a.setAttribute('aria-current', 'page');
+});
+</script>"""
+        middle.html(nav_html)
+        with right:
+            theme, launch = st.columns([1, 1.8], vertical_alignment="center")
+            with theme:
+                st.iframe(theme_switch_html(), height=34, alt="Theme switch: light or dark")
+            launch.html('<a class="vx-header-launch" href="./classify" target="_self">Launch Workspace</a>')
 
 
 def operational_context_banner() -> None:
@@ -1619,11 +1636,11 @@ def main():
     st.html(STYLE)
     pages = [st.Page(fn, title=title, url_path=path, default=(i == 0))
              for i, (title, fn, path) in enumerate(NAV_PAGES)]
-    navigation = st.navigation(pages, position="top")
+    navigation = st.navigation(pages, position="hidden")
 
     missing = missing_core_outputs()
     if missing:
-        brand_header(0.5)
+        brand_header()
         commands = sorted({CORE_OUTPUTS[name] for name in missing})
         st.error(
             "The console can't start because these outputs are missing: "
@@ -1632,7 +1649,7 @@ def main():
         )
         st.stop()
 
-    brand_header(float(load_summary().get("cost_optimal_threshold", 0.5)))
+    brand_header()
     navigation.run()
 
 

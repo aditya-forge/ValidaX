@@ -24,14 +24,14 @@ chartCategoricalColors = ["#1F6FEB", "#15803D", "#CA8A04", "#E11D48", "#7C3AED",
 
 [theme.dark]
 primaryColor = "#4C8DF6"
-backgroundColor = "#202124"
-secondaryBackgroundColor = "#292A2D"
-textColor = "#E8EAED"
+backgroundColor = "#050608"
+secondaryBackgroundColor = "#0D1016"
+textColor = "#E8EDF5"
 linkColor = "#4C8DF6"
-borderColor = "#3C4043"
-dataframeBorderColor = "#3C4043"
-dataframeHeaderBackgroundColor = "#292A2D"
-codeBackgroundColor = "#292A2D"
+borderColor = "#242833"
+dataframeBorderColor = "#242833"
+dataframeHeaderBackgroundColor = "#0D1016"
+codeBackgroundColor = "#0D1016"
 baseRadius = "4px"
 buttonRadius = "4px"
 showWidgetBorder = true
@@ -44,10 +44,10 @@ textColor = "#0F172A"
 borderColor = "#E2E8F0"
 
 [theme.dark.sidebar]
-backgroundColor = "#202124"
-secondaryBackgroundColor = "#292A2D"
-textColor = "#E8EAED"
-borderColor = "#3C4043"
+backgroundColor = "#050608"
+secondaryBackgroundColor = "#0D1016"
+textColor = "#E8EDF5"
+borderColor = "#242833"
 
 [browser]
 gatherUsageStats = false

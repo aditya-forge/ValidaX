@@ -58,11 +58,12 @@ def run_page(render: str) -> AppTest:
 
 
 def test_app_boots_with_top_navigation():
-    """The full script: brand header + st.navigation(position='top') + default Overview page."""
+    """The full script: branded navigation row + default Overview page."""
     at = AppTest.from_file(str(REPO / "app" / "app.py"), default_timeout=300).run()
     assert not at.exception, [e.message for e in at.exception]
     bodies = [h.proto.body for h in at.get("html")]
-    assert any("vx-status" in b and "Threshold 0.24" in b for b in bodies)      # top-right status badge
+    assert any('class="vx-header-nav"' in b for b in bodies)
+    assert any("Launch Workspace" in b for b in bodies)
     assert any("vx-strip" in b and "&#36;566,840" in b for b in bodies)          # telemetry strip
 
 
@@ -119,7 +120,7 @@ def test_presets_classify_in_one_click(preset, decision):
 def test_both_themes_share_one_stylesheet(console):
     """Every custom colour is a light-dark() pair; no hard-coded hex outside the token table."""
     import re
-    assert console.PALETTE["canvas"] == ("#F8FAFC", "#202124")
+    assert console.PALETTE["canvas"] == ("#F8FAFC", "#050608")
     assert console.PALETTE["accent"] == ("#1F6FEB", "#4C8DF6")
     css = re.sub(r'url\("data:[^)]*\)', "", console.STYLE)
     assert "light-dark(" in css
