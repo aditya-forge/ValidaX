@@ -1,8 +1,8 @@
-"""Fraud risk operations console -- Streamlit dashboard.
+"""ValidaX: payment fraud risk console (Streamlit).
 
-Four pages: Fraud overview, Alert queue, Transaction investigation and
-Threshold simulator. Built on the artifacts produced by src/model.py and
-src/scoring.py; launch from the repo root with `streamlit run app/app.py`.
+Pages: Overview, Classify, Alerts, Investigate and Simulator. Reads the
+artifacts produced by src/model.py and src/scoring.py. Run from the repo root
+with `streamlit run app/app.py`.
 
 Data note: IEEE-CIS Fraud Detection is real, anonymized e-commerce
 transaction data (not synthetic). TransactionDT is a relative time offset
@@ -11,9 +11,8 @@ from an undisclosed reference point, not a calendar timestamp. Many columns
 (Vesta); this console never claims to know their meaning. They are shown with
 generic family labels only, and their raw values are never displayed.
 
-Operating context: this is a transaction risk
-prioritization console. A score indicates elevated risk warranting review,
-not a determination of fraud. Cost and capacity figures are scenario
+Operating context: scores prioritise transactions for review. A score
+indicates elevated risk warranting review, not a determination of fraud. Cost and capacity figures are scenario
 assumptions imported from src/model.py.
 
 Reads: app/model.pkl and outputs/ (never written). Optional results from
@@ -73,46 +72,68 @@ OPTIONAL_OUTPUTS = {
 
 TIERS = ["Critical", "High", "Medium", "Low"]
 
-st.set_page_config(page_title="ValidaX | Payment Validation Engine", layout="wide")
+st.set_page_config(page_title="ValidaX | Payment Fraud Intelligence", page_icon="🛡️", layout="wide")
 
-# ---------------------------------------------------------------- design --
-# Flat, rectangular system UI: one canvas, one card surface, 1px rules, 4px corners.
-# The same tokens drive .streamlit/config.toml so native widgets and tables match.
-CANVAS = "#0A0E17"      # deep obsidian navy
-CARD = "#111726"        # panels, forms, tables, telemetry
-RULE = "#1E293B"        # 1px borders
-GRID = "#172033"        # chart gridlines, quieter than RULE
-INK = "#F8FAFC"
-BODY = "#CBD5E1"
-MUTED = "#94A3B8"
-CYAN = "#38BDF8"        # telemetry cyan: nav indicators, status, links
-ACCENT = "#0EA5E9"      # steel blue: primary rectangular actions
-ACCENT_HOVER = CYAN
-ON_ACCENT = CANVAS      # dark text on blue keeps button contrast above 7:1
-POSITIVE = "#22C55E"    # "No alert" decisions only
-DATA = CYAN
-PANEL = CARD
+# Design system
+# Flat, rectangular UI in two themes: one canvas, one surface, 1px rules, 4px corners,
+# no shadows or gradients. Streamlit sets `color-scheme` on the app container for the
+# active theme, so every custom colour is a CSS light-dark() pair and follows a theme
+# switch without a rerun. .streamlit/config.toml holds the same values for native
+# widgets and tables ([theme.light] and [theme.dark]).
+PALETTE = {  # token: (light, dark)
+    "canvas": ("#F8FAFC", "#0A0E17"),
+    "surface": ("#FFFFFF", "#111726"),
+    "rule": ("#E2E8F0", "#1E293B"),
+    "ink": ("#0F172A", "#F8FAFC"),
+    "body": ("#334155", "#CBD5E1"),
+    "muted": ("#64748B", "#94A3B8"),
+    "accent": ("#0284C7", "#38BDF8"),
+    "accent_hover": ("#0369A1", "#7DD3FC"),
+    "on_accent": ("#FFFFFF", "#0A0E17"),
+    "flag": ("#E11D48", "#F43F5E"),
+    "clear": ("#15803D", "#22C55E"),
+}
+
+
+def ld(token: str) -> str:
+    light, dark = PALETTE[token]
+    return f"light-dark({light}, {dark})"
+
+
+CANVAS, CARD, RULE = ld("canvas"), ld("surface"), ld("rule")
+INK, BODY, MUTED = ld("ink"), ld("body"), ld("muted")
+ACCENT, ACCENT_HOVER, ON_ACCENT = ld("accent"), ld("accent_hover"), ld("on_accent")
+FLAG, CLEAR = ld("flag"), ld("clear")
 RADIUS = "4px"
+
+# Chart marks are drawn by Plotly, which cannot read CSS, so they use mid-tones that
+# hold contrast on both canvases. Fonts, grids and hover labels come from Streamlit's
+# Plotly theme, which tracks the active theme in the browser.
+TRACE = "#0EA5E9"
+NEUTRAL = "#64748B"
+FAINT = "rgba(100, 116, 139, 0.35)"
 RISK_COLORS = {"Critical": "#F43F5E", "High": "#F97316", "Medium": "#EAB308", "Low": "#64748B"}
-INCREASES_RISK, DECREASES_RISK = RISK_COLORS["Critical"], DATA
+INCREASES_RISK, DECREASES_RISK = RISK_COLORS["Critical"], TRACE
 FONT_STACK = "'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif"
 MONO_STACK = "'IBM Plex Mono', ui-monospace, SFMono-Regular, Consolas, monospace"
 
-# Shield mark with a crossed X, plus the wordmark. Embedded as an image because
-# st.html sanitises inline <svg>.
-_LOGO_MARKUP = (
-    # viewBox cropped to the wordmark's width so no empty space sits before the divider.
-    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 136 40" width="136" height="40" fill="none">'
-    f'<path d="M4 5 H32 V20 C32 29.5 25.5 34.5 18 37 C10.5 34.5 4 29.5 4 20 V5 Z" stroke="{INK}" '
-    'stroke-width="2" stroke-linejoin="miter"/>'
-    f'<line x1="11" y1="12" x2="25" y2="28" stroke="{CYAN}" stroke-width="2.2" stroke-linecap="square"/>'
-    f'<line x1="25" y1="12" x2="11" y2="28" stroke="{INK}" stroke-width="2.2" stroke-linecap="square"/>'
-    f'<text x="44" y="27" fill="{INK}" font-family="Inter, system-ui, -apple-system, \'Segoe UI\', sans-serif" '
-    f'font-size="20" font-weight="600" letter-spacing="-0.02em">Valida<tspan fill="{CYAN}">X</tspan></text>'
-    '</svg>'
+
+# Logo: shield gate with a geometric X. st.html strips inline <svg>, so each colour
+# layer is an SVG mask filled by a light-dark() background: frame and one stroke take
+# the ink colour, the other stroke the accent. Both flip with the theme.
+def _svg_mask(body: str) -> str:
+    svg = f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="3 4 30 34" fill="none" stroke="#000">{body}</svg>'
+    return f'url("data:image/svg+xml;base64,{base64.b64encode(svg.encode()).decode()}")'
+
+
+LOGO_FRAME_MASK = _svg_mask(
+    '<path d="M4 5 H32 V20 C32 29.5 25.5 34.5 18 37 C10.5 34.5 4 29.5 4 20 V5 Z" stroke-width="2" '
+    'stroke-linejoin="miter"/><line x1="25" y1="12" x2="11" y2="28" stroke-width="2.2" stroke-linecap="square"/>'
 )
-LOGO_SVG = ('<img alt="ValidaX" width="122" height="36" src="data:image/svg+xml;base64,'
-            + base64.b64encode(_LOGO_MARKUP.encode()).decode() + '">')
+LOGO_CUT_MASK = _svg_mask('<line x1="11" y1="12" x2="25" y2="28" stroke-width="2.2" stroke-linecap="square"/>')
+LOGO_HTML = ('<span class="vx-logo" role="img" aria-label="ValidaX"><span class="vx-shield">'
+             '<i class="frame"></i><i class="cut"></i></span>'
+             '<span class="vx-word" aria-hidden="true">Valida<b>X</b></span></span>')
 
 STYLE = f"""
 <style>
@@ -123,22 +144,23 @@ h1 {{ font-size: 1.55rem !important; font-weight: 600 !important; letter-spacing
 h2 {{ font-size: 1.12rem !important; font-weight: 600 !important; color: {INK} !important; }}
 h3 {{ font-size: 1rem !important; font-weight: 600 !important; color: {INK} !important; }}
 .stApp p, .stApp li, .stApp label {{ color: {BODY}; }}
-[data-testid="stCaptionContainer"], [data-testid="stCaptionContainer"] p {{ color: {MUTED} !important; }}
+[data-testid="stCaptionContainer"], [data-testid="stCaptionContainer"] p {{ color: {MUTED} !important;
+    opacity: 1 !important; }}
 [data-testid="stWidgetLabel"] p {{ color: {INK} !important; font-weight: 500; font-size: 0.85rem; }}
 
 /* Top bar: flat, ruled, no shadow. */
 [data-testid="stHeader"] {{ background: {CANVAS}; border-bottom: 1px solid {RULE}; box-shadow: none; }}
 [data-testid="stSidebar"], [data-testid="stSidebarCollapsedControl"] {{ display: none; }}
-/* Top nav: flat links; the active page gets a 2px cyan underline, not a filled chip. */
+/* Top nav: flat links; the active page gets a 2px accent underline, not a filled chip. */
 [data-testid="stTopNavLink"] {{ background: transparent !important; border-radius: 0 !important;
     border-bottom: 2px solid transparent; }}
 [data-testid="stTopNavLink"] p {{ color: {MUTED} !important; font-weight: 500; }}
 [data-testid="stTopNavLink"]:hover p {{ color: {INK} !important; }}
-[data-testid="stTopNavLink"][aria-current="page"] {{ border-bottom-color: {CYAN}; }}
+[data-testid="stTopNavLink"][aria-current="page"] {{ border-bottom-color: {ACCENT}; }}
 [data-testid="stTopNavLink"][aria-current="page"] p {{ color: {INK} !important; }}
 [data-testid="stBaseButton-header"] {{ color: {MUTED}; }}
 
-/* Native buttons: rectangular; primary is steel blue with dark text. */
+/* Native buttons: rectangular; primary is the accent with contrasting text. */
 [data-testid="stBaseButton-primary"], [data-testid="stBaseButton-primaryFormSubmit"] {{
     background: {ACCENT} !important; border: 1px solid {ACCENT} !important; color: {ON_ACCENT} !important; }}
 [data-testid="stBaseButton-primary"] p, [data-testid="stBaseButton-primaryFormSubmit"] p {{
@@ -146,8 +168,8 @@ h3 {{ font-size: 1rem !important; font-weight: 600 !important; color: {INK} !imp
 [data-testid="stBaseButton-primary"]:hover, [data-testid="stBaseButton-primaryFormSubmit"]:hover {{
     background: {ACCENT_HOVER} !important; border-color: {ACCENT_HOVER} !important; }}
 [data-testid="stBaseButton-secondary"] {{ background: {CARD}; border: 1px solid {RULE}; }}
-[data-testid="stBaseButton-secondary"]:hover {{ border-color: {CYAN}; color: {INK}; }}
-.stApp a:focus-visible, .stApp button:focus-visible {{ outline: 2px solid {CYAN}; outline-offset: 2px; }}
+[data-testid="stBaseButton-secondary"]:hover {{ border-color: {ACCENT}; color: {INK}; }}
+.stApp a:focus-visible, .stApp button:focus-visible {{ outline: 2px solid {ACCENT}; outline-offset: 2px; }}
 
 /* Rectangular surfaces: metrics, tables, charts, expanders, bordered containers. */
 [data-testid="stMetric"] {{
@@ -170,18 +192,25 @@ h3 {{ font-size: 1rem !important; font-weight: 600 !important; color: {INK} !imp
 .stTabs [data-baseweb="tab-list"] {{ border-bottom: 1px solid {RULE}; gap: 0; }}
 .stTabs [data-baseweb="tab"] p {{ font-weight: 500; color: {MUTED}; }}
 .stTabs [data-baseweb="tab"][aria-selected="true"] p {{ color: {INK}; }}
-.stTabs [data-baseweb="tab-highlight"] {{ background-color: {CYAN} !important; }}
+.stTabs [data-baseweb="tab-highlight"] {{ background-color: {ACCENT} !important; }}
 hr {{ border-color: {RULE} !important; }}
 
-/* Brand row and status badge. */
-.vx-top {{ display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap;
-    padding: 0 0 0.9rem 0; margin-bottom: 1.1rem; border-bottom: 1px solid {RULE}; }}
-.vx-mark {{ display: flex; align-items: center; gap: 0.65rem; }}
-.vx-mark img {{ display: block; }}
-.vx-mark .desc {{ color: {MUTED}; font-size: 0.85rem; padding-left: 0.65rem; border-left: 1px solid {RULE}; }}
-.vx-status {{ color: {BODY}; font-size: 0.8rem; border: 1px solid {RULE}; border-left: 2px solid {CYAN};
+/* Brand row: logo, product line, status badge, theme switch. */
+.st-key-vx_brand {{ border-bottom: 1px solid {RULE}; padding-bottom: 0.75rem; margin-bottom: 0.4rem; }}
+.vx-mark {{ display: flex; align-items: center; gap: 0.75rem; }}
+.vx-logo {{ display: inline-flex; align-items: center; gap: 0.5rem; }}
+.vx-shield {{ position: relative; width: 26px; height: 30px; flex: none; }}
+.vx-shield i {{ position: absolute; inset: 0; -webkit-mask: var(--m) center / contain no-repeat;
+    mask: var(--m) center / contain no-repeat; }}
+.vx-shield .frame {{ --m: {LOGO_FRAME_MASK}; background: {INK}; }}
+.vx-shield .cut {{ --m: {LOGO_CUT_MASK}; background: {ACCENT}; }}
+.vx-word {{ color: {INK}; font-size: 1.2rem; font-weight: 600; letter-spacing: -0.02em; line-height: 1; }}
+.vx-word b {{ color: {ACCENT}; font-weight: 600; }}
+.vx-mark .desc {{ color: {MUTED}; font-size: 0.85rem; padding-left: 0.75rem; border-left: 1px solid {RULE}; }}
+.vx-status-row {{ display: flex; justify-content: flex-end; }}
+.vx-status {{ color: {BODY}; font-size: 0.8rem; border: 1px solid {RULE}; border-left: 2px solid {ACCENT};
     border-radius: {RADIUS}; padding: 0.28rem 0.6rem; background: {CARD}; white-space: nowrap; }}
-.vx-status .dot {{ color: {CYAN}; }}
+.vx-status .dot {{ color: {ACCENT}; }}
 .vx-status .sep {{ color: {MUTED}; padding: 0 0.3rem; }}
 
 /* Overview: title lockup, command callout, context box, telemetry strip. */
@@ -199,7 +228,7 @@ hr {{ border-color: {RULE} !important; }}
 .vx-box pre {{ margin: 0; font-family: {MONO_STACK}; font-size: 0.8rem; line-height: 1.7; color: {BODY};
     white-space: pre-wrap; overflow-wrap: anywhere; background: transparent; }}
 .vx-box pre .c {{ color: {MUTED}; }}
-.vx-box pre .p {{ color: {CYAN}; }}
+.vx-box pre .p {{ color: {ACCENT}; }}
 .vx-kv {{ display: grid; grid-template-columns: max-content 1fr; column-gap: 1rem; row-gap: 0.3rem; margin-top: 0.7rem;
     padding-top: 0.65rem; border-top: 1px solid {RULE}; font-size: 0.82rem; }}
 .vx-kv .k {{ color: {MUTED}; }}
@@ -218,9 +247,14 @@ hr {{ border-color: {RULE} !important; }}
 .vx-cell .s {{ color: {MUTED}; font-size: 0.74rem; margin-top: 0.1rem; }}
 @media (max-width: 1100px) {{ .vx-strip {{ grid-template-columns: repeat(2, minmax(0, 1fr)); }} }}
 
+/* Classification result: decision first. */
 .vx-result {{ display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1px; background: {RULE};
     border: 1px solid {RULE}; border-radius: {RADIUS}; overflow: hidden; margin: 1rem 0 0.5rem 0; }}
+.vx-result.is-flag {{ border-left: 3px solid {FLAG}; }}
+.vx-result.is-clear {{ border-left: 3px solid {CLEAR}; }}
 .vx-result .v {{ font-size: 1.3rem; }}
+.vx-result .v .flag {{ color: {FLAG}; }}
+.vx-result .v .clear {{ color: {CLEAR}; }}
 @media (max-width: 1100px) {{ .vx-result {{ grid-template-columns: repeat(2, minmax(0, 1fr)); }} }}
 .vx-note {{ color: {MUTED}; font-size: 0.82rem; line-height: 1.5; }}
 
@@ -228,7 +262,7 @@ hr {{ border-color: {RULE} !important; }}
 .vx-actions {{ display: flex; gap: 0.6rem; flex-wrap: wrap; margin: 1rem 0 1.1rem 0; }}
 .vx-btn {{ display: inline-block; padding: 0.5rem 1rem; border-radius: {RADIUS}; font-size: 0.88rem; font-weight: 500;
     text-decoration: none !important; border: 1px solid {RULE}; color: {INK} !important; background: {CARD}; }}
-.vx-btn:hover {{ border-color: {CYAN}; }}
+.vx-btn:hover {{ border-color: {ACCENT}; }}
 .vx-btn.primary {{ background: {ACCENT}; border-color: {ACCENT}; color: {ON_ACCENT} !important; font-weight: 600; }}
 .vx-btn.primary:hover {{ background: {ACCENT_HOVER}; border-color: {ACCENT_HOVER}; }}
 
@@ -237,22 +271,24 @@ hr {{ border-color: {RULE} !important; }}
     border-bottom: 1px solid {RULE}; }}
 
 .reasons {{ margin: 0.2rem 0 0 0; padding-left: 1.1rem; font-size: 0.9rem; line-height: 1.65; }}
-.reasons .up {{ color: {INCREASES_RISK}; }}
-.reasons .down {{ color: {DECREASES_RISK}; }}
+.reasons .up {{ color: {FLAG}; }}
+.reasons .down {{ color: {ACCENT}; }}
+.vx-status-line {{ color: {MUTED}; font-size: 0.82rem; border-left: 2px solid {RULE}; padding: 0.1rem 0 0.1rem 0.6rem;
+    margin: 0.2rem 0 0.6rem 0; }}
 </style>
 """
 
+# Transparent backgrounds let the surrounding card show through in either theme.
 PLOT_LAYOUT = dict(
-    font=dict(family=FONT_STACK, size=12, color=BODY),
-    paper_bgcolor=CARD,
-    plot_bgcolor=CARD,
+    font=dict(family=FONT_STACK, size=12),
+    paper_bgcolor="rgba(0,0,0,0)",
+    plot_bgcolor="rgba(0,0,0,0)",
     margin=dict(l=14, r=14, t=46, b=14),
-    title=dict(x=0.01, xanchor="left", font=dict(size=14, color=INK)),
-    xaxis=dict(gridcolor=GRID, linecolor=RULE, zeroline=False, tickfont=dict(color=MUTED)),
-    yaxis=dict(gridcolor=GRID, linecolor=RULE, zeroline=False, tickfont=dict(color=MUTED)),
-    legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1, title_text="",
-                font=dict(color=BODY)),
-    hoverlabel=dict(font_family=FONT_STACK, bgcolor=CANVAS, bordercolor=RULE, font_color=INK),
+    title=dict(x=0.01, xanchor="left", font=dict(size=14)),
+    xaxis=dict(zeroline=False),
+    yaxis=dict(zeroline=False),
+    legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1, title_text=""),
+    hoverlabel=dict(font_family=FONT_STACK),
 )
 
 
@@ -272,28 +308,88 @@ def html_safe(text: str) -> str:
     return html.escape(str(text)).replace("$", "&#36;")
 
 
+# Theme switch. Streamlit keeps the chosen theme in localStorage under
+# stActiveTheme-<path>-v2 ("Light" or "Dark") and applies it on load. The switch runs
+# in a same-origin st.iframe: it writes that key for every page path and reloads the
+# app. Its own colours are read from the app canvas, so it always matches the theme.
+_THEME_SWITCH = """
+<style>
+:root { color-scheme: normal; }  /* match the host iframe so Chrome keeps the frame transparent */
+html, body { margin: 0; background: transparent; font: 500 12px/1 'IBM Plex Sans', system-ui, sans-serif; }
+.seg { display: flex; box-sizing: border-box; width: 100%; border: 1px solid var(--rule); border-radius: 4px;
+       overflow: hidden; }
+button { all: unset; flex: 1; text-align: center; cursor: pointer; padding: 9px 0; color: var(--muted);
+         background: var(--surface); }
+button + button { border-left: 1px solid var(--rule); }
+button[aria-pressed="true"] { color: var(--on); background: var(--accent); cursor: default; }
+button:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+</style>
+<div class="seg" role="group" aria-label="Theme">
+  <button type="button" data-theme="Dark">Dark</button><button type="button" data-theme="Light">Light</button>
+</div>
+<script>
+const app = window.parent, COLORS = __COLORS__, PAGES = __PAGES__;
+function active() {
+  const root = app.document.querySelector(".stApp");
+  const rgb = root ? app.getComputedStyle(root).backgroundColor.match(/\\d+/g) : null;
+  if (!rgb) return "Dark";
+  const [r, g, b] = rgb.map(Number);
+  return (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255 > 0.5 ? "Light" : "Dark";
+}
+function paint() {
+  const theme = active();
+  for (const [k, v] of Object.entries(COLORS[theme])) document.documentElement.style.setProperty("--" + k, v);
+  document.querySelectorAll("button").forEach(b => b.setAttribute("aria-pressed", b.dataset.theme === theme));
+}
+function choose(theme) {
+  if (theme === active()) return;
+  const path = app.location.pathname;
+  const base = path.replace(new RegExp("(" + PAGES.join("|") + ")/?$"), "");
+  new Set([path, base, ...PAGES.map(p => base + p)]).forEach(
+    p => app.localStorage.setItem("stActiveTheme-" + p + "-v2", JSON.stringify(theme)));
+  app.location.reload();
+}
+document.querySelectorAll("button").forEach(b => b.addEventListener("click", () => choose(b.dataset.theme)));
+paint();
+setInterval(paint, 800);
+</script>
+"""
+
+
+def theme_switch_html() -> str:
+    colors = {name: {"surface": PALETTE["surface"][i], "rule": PALETTE["rule"][i], "muted": PALETTE["muted"][i],
+                     "accent": PALETTE["accent"][i], "on": PALETTE["on_accent"][i]}
+              for i, name in enumerate(("Light", "Dark"))}
+    return (_THEME_SWITCH.replace("__COLORS__", json.dumps(colors))
+            .replace("__PAGES__", json.dumps([path for _, _, path in NAV_PAGES])))
+
+
 def brand_header(threshold: float) -> None:
-    """Top-left mark and product name; top-right live status badge."""
-    st.html(
-        f'<div class="vx-top"><div class="vx-mark">{LOGO_SVG}'
-        '<span class="desc">Payment Validation Engine</span></div>'
-        f'<div class="vx-status"><span class="dot">●</span> Active<span class="sep">·</span>'
-        f'Threshold {threshold:.2f}<span class="sep">·</span>{DAILY_REVIEW_CAPACITY:,}/day cap</div></div>'
-    )
+    """Logo and product line on the left; live status badge and theme switch on the right."""
+    with st.container(key="vx_brand"):
+        left, right = st.columns([3, 2], vertical_alignment="center")
+        left.html(f'<div class="vx-mark">{LOGO_HTML}<span class="desc">Payment Fraud Intelligence</span></div>')
+        status, switch = right.columns([5, 2], vertical_alignment="center")
+        status.html(
+            f'<div class="vx-status-row"><div class="vx-status"><span class="dot">●</span> Active'
+            f'<span class="sep">·</span>Threshold {threshold:.2f}<span class="sep">·</span>'
+            f'{DAILY_REVIEW_CAPACITY:,}/day cap</div></div>'
+        )
+        with switch:
+            st.iframe(theme_switch_html(), width=118, height=34, alt="Theme switch: dark or light")
 
 
 def operational_context_banner() -> None:
     st.html(
-        '<div class="ctx"><strong>Operating context.</strong> Scores rank '
-        "transactions for investigator review: a high score indicates <strong>elevated risk warranting "
-        "review, not a determination of fraud</strong>. <span class=\"muted\">Scenario assumptions:</span> "
-        f"missed fraud &#36;{FALSE_NEGATIVE_COST:,}, false-positive review &#36;{FALSE_POSITIVE_COST:,}; "
-        f"review capacity {DAILY_REVIEW_CAPACITY:,} alerts/day. Masked C/D/M/V/id_ columns appear with "
-        "generic family labels only.</div>"
+        '<div class="ctx"><strong>Operating context:</strong> scores rank transactions for review. '
+        "A flag means <strong>elevated risk warranting review, not a determination of fraud</strong>. "
+        f'<span class="muted">Scenario:</span> missed fraud &#36;{FALSE_NEGATIVE_COST:,} | false positive '
+        f"&#36;{FALSE_POSITIVE_COST:,} | capacity {DAILY_REVIEW_CAPACITY:,} alerts/day. Masked C/D/M/V/id_ "
+        "columns: family labels only.</div>"
     )
 
 
-# ------------------------------------------------------ feature labelling --
+# Section: Feature labelling
 # src/scoring.py owns the labels: masked columns map to their family label
 # ("masked counting feature (C14)") and never carry a value in reason codes.
 display_label = label_for_feature
@@ -328,7 +424,7 @@ def safe_reason(text) -> str:
     return text
 
 
-# ------------------------------------------------------------ card history --
+# Section: Card history
 # card1 velocity features use -1 for "no prior transaction". A first-seen card
 # also has no prior average, so its amount-vs-typical ratio equals the raw
 # amount and is not a meaningful comparison.
@@ -374,7 +470,7 @@ def investigation_reason(feature: str, shap_value: float, raw_value, first_seen:
     return reason_text(feature, shap_value, raw_value)
 
 
-# ---------------------------------------------------------------- data I/O --
+# Section: Data I/O
 def missing_core_outputs() -> list:
     return [name for name in CORE_OUTPUTS if not (OUTPUTS_DIR / name).is_file()]
 
@@ -434,7 +530,7 @@ def mean_pm_std(frame: pd.DataFrame, prefix: str, digits: int = 4):
         return None
     std = frame[f"{prefix}_std"] if f"{prefix}_std" in frame else pd.Series(float("nan"), index=frame.index)
     return [
-        "–" if pd.isna(m) else (f"{m:.{digits}f}" if pd.isna(s) else f"{m:.{digits}f} ± {s:.{digits}f}")
+        "n/a" if pd.isna(m) else (f"{m:.{digits}f}" if pd.isna(s) else f"{m:.{digits}f} ± {s:.{digits}f}")
         for m, s in zip(frame[f"{prefix}_mean"], std, strict=True)
     ]
 
@@ -539,10 +635,9 @@ def render_alert_segments(clusters: pd.DataFrame, threshold=None) -> None:
         if col not in config:
             config[col] = st.column_config.NumberColumn(display_label(col), format=CLUSTER_FORMATS.get(col, "%.2f"))
     st.dataframe(table, hide_index=True, width="stretch", column_config=config)
-    note = ("Segment averages over interpretable features only; segments are not fraud verdicts. "
-            "Time is a position in the relative TransactionDT cycle. A first-seen card has no prior "
-            "transaction and no prior average, so its time gap is shown as text and its "
-            "amount-vs-typical ratio is not meaningful.")
+    note = ("Averages over interpretable features. Segments are not fraud verdicts. Time is a position "
+            "in the relative TransactionDT cycle. First-seen cards have no prior transaction or average: "
+            "time gap shown as text, amount ratio not meaningful.")
     if dropped:
         note += f" {len(dropped)} masked column(s) were removed before display."
     st.caption(note)
@@ -636,7 +731,7 @@ def get_main_bundle():
         return None
 
 
-# ------------------------------------------------------------- analytics --
+# Section: Analytics
 def cost_at_threshold(scored: pd.DataFrame, threshold: float) -> dict:
     alerted = scored["fraud_probability"] >= threshold
     fraud = scored["isFraud"] == 1
@@ -673,15 +768,15 @@ def tier_table(scored: pd.DataFrame) -> pd.DataFrame:
     return table.reset_index().rename(columns={"risk_tier": "tier"})
 
 
-# ------------------------------------------------------------------- pages --
+# Section: Pages
 def page_overview(scored: pd.DataFrame, summary: dict, embedded: bool = False):
     if embedded:
         st.subheader("Detection performance")
     else:
         st.title("Fraud overview")
     st.caption(
-        "Chronological test window: the most recent 20% of transactions by TransactionDT "
-        "offset, never seen in training. Figures below are for the deployed model."
+        "Test window: latest 20% of transactions by TransactionDT, held out from training. "
+        "Deployed model."
     )
 
     flagged = int((scored["risk_tier"] != "Low").sum())
@@ -698,10 +793,9 @@ def page_overview(scored: pd.DataFrame, summary: dict, embedded: bool = False):
     if op is not None:
         m = cost_at_threshold(scored, float(op))
         st.markdown(md_safe(
-            f"At the deployed threshold **{op:.2f}**: **{m['alerts']:,}** transactions flagged for review "
-            f"({m['true_positives']:,} fraudulent, {m['false_positives']:,} legitimate) and "
-            f"{m['false_negatives']:,} fraudulent transactions not flagged: precision {m['precision']:.1%}, "
-            f"recall {m['recall']:.1%}, scenario cost ${m['estimated_cost']:,.0f}."
+            f"Operating Threshold: **{op:.2f}** | flagged **{m['alerts']:,}** ({m['true_positives']:,} "
+            f"fraudulent, {m['false_positives']:,} legitimate) | missed {m['false_negatives']:,} | precision "
+            f"{m['precision']:.1%} | recall {m['recall']:.1%} | scenario cost ${m['estimated_cost']:,.0f}"
         ))
 
     # Risk ladder: the alert queue's shape in one bar.
@@ -710,14 +804,13 @@ def page_overview(scored: pd.DataFrame, summary: dict, embedded: bool = False):
     for _, row in tiers.iterrows():
         ladder.add_trace(go.Bar(
             x=[row["transactions"]], y=[""], orientation="h", name=row["tier"],
-            marker=dict(color=RISK_COLORS[row["tier"]], line=dict(color=CANVAS, width=2)),
+            marker=dict(color=RISK_COLORS[row["tier"]], line=dict(width=0)),
             hovertemplate=(f"{row['tier']}: {row['transactions']:,.0f} transactions "
                            f"({row['share']:.1%}), observed fraud rate {row['fraud_rate']:.1%}<extra></extra>"),
         ))
     styled(ladder, "Risk ladder: test-window transactions by tier", height=190, barmode="stack",
            xaxis_title=None, yaxis=dict(showticklabels=False), margin=dict(l=14, r=14, t=46, b=10),
-           legend=dict(orientation="h", yanchor="top", y=-0.28, xanchor="left", x=0, title_text="",
-                       font=dict(color=BODY)))
+           legend=dict(orientation="h", yanchor="top", y=-0.28, xanchor="left", x=0, title_text=""))
     left, right = st.columns([1, 1], gap="medium")
     left.plotly_chart(ladder, width="stretch")
     right.dataframe(
@@ -736,7 +829,7 @@ def page_overview(scored: pd.DataFrame, summary: dict, embedded: bool = False):
     by_product = (scored.groupby("ProductCD")["isFraud"].agg(["mean", "size"])
                   .sort_values("mean").reset_index())
     fig = go.Figure(go.Bar(
-        x=by_product["mean"], y=by_product["ProductCD"], orientation="h", marker_color=DATA,
+        x=by_product["mean"], y=by_product["ProductCD"], orientation="h", marker_color=TRACE,
         text=[f"{v:.1%}" for v in by_product["mean"]], textposition="outside",
         customdata=by_product["size"], hovertemplate="%{y}: %{x:.2%} of %{customdata:,} transactions<extra></extra>",
     ))
@@ -746,7 +839,7 @@ def page_overview(scored: pd.DataFrame, summary: dict, embedded: bool = False):
 
     trend = scored.groupby("transaction_day")["isFraud"].agg(["sum", "size"]).reset_index()
     fig = go.Figure(go.Scatter(
-        x=trend["transaction_day"], y=trend["sum"], mode="lines", line=dict(color=DATA, width=2),
+        x=trend["transaction_day"], y=trend["sum"], mode="lines", line=dict(color=TRACE, width=2),
         hovertemplate="relative day %{x}: %{y} frauds<extra></extra>",
     ))
     c2.plotly_chart(styled(fig, "Frauds per relative day (TransactionDT offset)",
@@ -760,7 +853,7 @@ def page_overview(scored: pd.DataFrame, summary: dict, embedded: bool = False):
     ranked = importance.iloc[::-1]
     fig = go.Figure(go.Bar(
         x=ranked["mean_abs_shap"], y=ranked["label"], orientation="h",
-        marker_color=[RISK_COLORS["Low"] if fam == "masked" else DATA for fam in ranked["family"]],
+        marker_color=[RISK_COLORS["Low"] if fam == "masked" else TRACE for fam in ranked["family"]],
         hovertemplate="%{y}: mean |SHAP| %{x:.3f}<extra></extra>",
     ))
     st.plotly_chart(
@@ -769,11 +862,10 @@ def page_overview(scored: pd.DataFrame, summary: dict, embedded: bool = False):
         width="stretch",
     )
     if SHAP_SUMMARY_PATH.exists():
-        with st.expander("Static SHAP summary plot from notebook 03"):
+        with st.expander("SHAP summary plot (notebook 03)"):
             st.image(str(SHAP_SUMMARY_PATH), width="stretch")
-            st.caption("This plot is an image from notebook 03 and shows raw column names; masked "
-                       "names (C*, D*, M*, V*, id_*) are identifiers only, with no meaning implied. "
-                       "Use the chart above for family labels.")
+            st.caption("Static image with raw column names. Masked names (C*, D*, M*, V*, id_*) are "
+                       "identifiers only. The chart above uses family labels.")
 
     st.subheader("Model benchmarks")
     st.markdown("**Model comparison**")
@@ -815,7 +907,7 @@ def page_alert_queue(scored: pd.DataFrame):
     c1.metric("In queue", f"{len(queue):,}")
     c2.metric(f"Days of review at {DAILY_REVIEW_CAPACITY:,}/day",
               f"{len(queue) / max(scored['transaction_day'].nunique(), 1) / DAILY_REVIEW_CAPACITY:.2f}")
-    c3.metric("Median risk score", f"{queue['fraud_probability'].median():.4f}" if len(queue) else "–")
+    c3.metric("Median risk score", f"{queue['fraud_probability'].median():.4f}" if len(queue) else "n/a")
 
     columns = ["TransactionID", "fraud_probability", "risk_tier", "TransactionAmt", "ProductCD",
                "card4", "card6", "P_emaildomain", "DeviceType", "top_reason_1"]
@@ -849,6 +941,18 @@ def page_alert_queue(scored: pd.DataFrame):
             render_alert_segments(clusters, threshold)
 
 
+def stored_reasons(row: pd.Series, status: str) -> None:
+    """Reason codes saved by the scoring run, for hosts without the feature table."""
+    st.html(f'<div class="vx-status-line">{html_safe(status)}</div>')
+    reasons = [r for r in (row.get(f"top_reason_{i}") for i in (1, 2, 3)) if isinstance(r, str) and r]
+    if not reasons:
+        st.html('<div class="vx-status-line">No stored reason codes for this transaction.</div>')
+        return
+    items = "".join(f'<li class="{"down" if "decreased risk" in r else "up"}">{html_safe(r)}</li>' for r in reasons)
+    st.html(f'<ol class="reasons">{items}</ol>')
+    st.caption("Masked columns: family label only, no values.")
+
+
 def page_investigation(scored: pd.DataFrame, bundle: dict):
     st.title("Transaction investigation")
 
@@ -878,14 +982,13 @@ def page_investigation(scored: pd.DataFrame, bundle: dict):
     c1, c2, c3, c4, c5 = st.columns(5)
     c1.metric("Risk score", f"{row['fraud_probability']:.4f}")  # same precision as the picker
     c2.metric("Tier", row["risk_tier"])
-    c3.metric(f"Decision at {threshold:.2f}", "Flag for review" if flagged else "No alert")
+    c3.metric(f"Verdict at {threshold:.2f}", verdict(row["fraud_probability"], threshold))
     c4.metric("Amount", f"${row['TransactionAmt']:,.2f}")
     c5.metric("Relative day", f"{int(row['transaction_day'])}")
     st.caption(md_safe(
-        f"Operating threshold {threshold:.2f} is cost-optimal for the scenario "
-        f"(missed fraud ${FALSE_NEGATIVE_COST:,}, false-positive review ${FALSE_POSITIVE_COST:,}). "
-        "\"Flag for review\" means elevated risk warranting review, not a determination of fraud; "
-        "\"No alert\" means the transaction is treated as legitimate unless other evidence arises."
+        f"Cost-Optimal Threshold: {threshold:.2f} (missed fraud ${FALSE_NEGATIVE_COST:,} | false positive "
+        f"${FALSE_POSITIVE_COST:,}). Flagged: elevated risk warranting review, not a determination of fraud. "
+        "Legitimate: below threshold, no review queued."
     ))
 
     features_ready = FEATURES_PATH.is_file()
@@ -930,16 +1033,14 @@ def page_investigation(scored: pd.DataFrame, bundle: dict):
             else:
                 st.caption("card1 is a shared card-attribute code used as an account key, so the history "
                            "can include other cards with the same code.")
-        st.caption(f"Demo only: ground truth, not known at review time. isFraud = {int(row['isFraud'])}")
+        st.caption(f"Ground truth (not available at review time): isFraud = {int(row['isFraud'])}")
 
     with why:
         st.subheader("Why flagged" if flagged else "Main risk drivers")
-        if not features_ready:
-            st.info("Live SHAP needs data/processed/transactions_features.parquet. Build it with "
-                    "`python src/data_processing.py` and `python src/features.py`.")
-            return
         if raw_row is None:
-            st.info("This transaction is not in the test-window feature table.")
+            stored_reasons(row, "Live SHAP: feature table not loaded on this host. Showing reason codes "
+                                "stored by the scoring run." if not features_ready else
+                                "Transaction not in the test-window feature table. Showing stored reason codes.")
             return
 
         model, feature_cols = bundle["xgb_model"], bundle["feature_cols"]
@@ -968,15 +1069,15 @@ def page_investigation(scored: pd.DataFrame, bundle: dict):
             for r, v in zip(reasons[:5], contrib["shap_value"][:5], strict=True)
         )
         st.html(f'<ol class="reasons">{items}</ol>')
-        st.caption("Risk score from outputs/scored_transactions.csv; contributions recomputed live "
-                   "from app/model.pkl. Masked columns show a family label and never a value.")
+        st.caption("Score: outputs/scored_transactions.csv. Contributions: live TreeSHAP on app/model.pkl. "
+                   "Masked columns: family label only, no values.")
 
 
 def page_threshold_simulator(scored: pd.DataFrame, summary: dict):
     st.title("Threshold simulator")
     st.caption(md_safe(
-        f"Scenario costs: missed fraud ${FALSE_NEGATIVE_COST:,}, false-positive review "
-        f"${FALSE_POSITIVE_COST:,}. These are assumptions, not industry figures."
+        f"Scenario costs: missed fraud ${FALSE_NEGATIVE_COST:,} | false positive ${FALSE_POSITIVE_COST:,}. "
+        "Assumed values, not industry benchmarks."
     ))
 
     sweep = load_output_csv("threshold_sweep.csv")
@@ -1008,28 +1109,27 @@ def page_threshold_simulator(scored: pd.DataFrame, summary: dict):
         },
     )
     note_col.caption(md_safe(
-        f"Fraudulent vs. legitimate outcomes on the {len(scored):,}-transaction test window at threshold "
-        f"{threshold:.2f}. Missed fraud costs ${FALSE_NEGATIVE_COST:,} each and a legitimate transaction "
-        f"flagged for review costs ${FALSE_POSITIVE_COST:,} (scenario assumptions). Above "
-        f"{DAILY_REVIEW_CAPACITY:,} alerts/day the team cannot review every alert; the capacity chart "
-        "below shows what the top 500 per day catch."
+        f"Outcomes on {len(scored):,} test-window transactions at threshold {threshold:.2f}. Each missed "
+        f"fraud costs ${FALSE_NEGATIVE_COST:,}; each legitimate transaction flagged costs "
+        f"${FALSE_POSITIVE_COST:,}. Above {DAILY_REVIEW_CAPACITY:,} alerts/day not every alert gets reviewed: "
+        f"see the capacity chart below."
     ))
 
     c1, c2 = st.columns(2)
     fig = go.Figure()
     fig.add_trace(go.Scatter(x=sweep["threshold"], y=sweep["precision"], name="Precision",
-                             line=dict(color=DATA, width=2)))
+                             line=dict(color=TRACE, width=2)))
     fig.add_trace(go.Scatter(x=sweep["threshold"], y=sweep["recall"], name="Recall",
-                             line=dict(color=INK, width=2, dash="dot")))
-    fig.add_vline(x=threshold, line_dash="dash", line_color=MUTED)
+                             line=dict(color=NEUTRAL, width=2, dash="dot")))
+    fig.add_vline(x=threshold, line_dash="dash", line_color=NEUTRAL)
     c1.plotly_chart(styled(fig, "Precision and recall by threshold", xaxis_title="threshold",
                            yaxis_tickformat=".0%"), width="stretch")
 
     fig = go.Figure(go.Scatter(x=cost_curve["threshold"], y=cost_curve["total_cost"],
-                               name="Scenario cost", line=dict(color=INK, width=2)))
-    fig.add_vline(x=threshold, line_dash="dash", line_color=MUTED)
+                               name="Scenario cost", line=dict(color=NEUTRAL, width=2)))
+    fig.add_vline(x=threshold, line_dash="dash", line_color=NEUTRAL)
     if best_t is not None:
-        fig.add_vline(x=best_t, line_color=DATA, annotation_text=f"cost-optimal {best_t:.2f}",
+        fig.add_vline(x=best_t, line_color=TRACE, annotation_text=f"cost-optimal {best_t:.2f}",
                       annotation_position="top right")
     c2.plotly_chart(styled(fig, "Scenario cost by threshold", xaxis_title="threshold",
                            yaxis_tickprefix="$", yaxis_tickformat=",.0f"), width="stretch")
@@ -1037,9 +1137,9 @@ def page_threshold_simulator(scored: pd.DataFrame, summary: dict):
     st.subheader(f"Fixed capacity: {DAILY_REVIEW_CAPACITY:,} alerts per day")
     daily = load_output_csv("daily_capacity_simulation.csv")
     fig = go.Figure()
-    fig.add_trace(go.Bar(x=daily["day"], y=daily["fraud_in_day"], name="Frauds that day", marker_color="#334155"))
+    fig.add_trace(go.Bar(x=daily["day"], y=daily["fraud_in_day"], name="Frauds that day", marker_color=FAINT))
     fig.add_trace(go.Bar(x=daily["day"], y=daily["fraud_captured"], name="Caught within capacity",
-                         marker_color=DATA))
+                         marker_color=TRACE))
     st.plotly_chart(styled(fig, "Daily fraud capture under a fixed review capacity", barmode="overlay",
                            xaxis_title="relative day", yaxis_title="frauds"), width="stretch")
     st.caption(
@@ -1049,7 +1149,7 @@ def page_threshold_simulator(scored: pd.DataFrame, summary: dict):
     )
 
 
-# --------------------------------------------------------- classification --
+# Section: Classification
 def explain_rows(model, key: str, X: pd.DataFrame, top_n: int):
     """Top-|SHAP| (feature, value) pairs per row, highest first."""
     values = get_explainer(model, key)(X).values
@@ -1092,27 +1192,30 @@ def apply_preset(name: str, meta: dict) -> None:
     st.session_state["cls_preset"] = name
 
 
-def result_block(probability: float, threshold: float, deployed_threshold: float, preset) -> None:
-    """Decision, score and operating context first; links to drivers and threshold testing."""
-    flagged = probability >= threshold
-    decision = "Flag for review" if flagged else "No alert"
-    label = inf.FRAUDULENT if flagged else inf.LEGITIMATE
-    color = RISK_COLORS["Critical"] if flagged else POSITIVE
+def verdict(probability: float, threshold: float) -> str:
+    return "Flagged" if probability >= threshold else "Legitimate"
+
+
+def result_block(probability: float, threshold: float, form_threshold: float, preset) -> None:
+    """Verdict at the operating threshold, 4-decimal score and scenario first; links to drivers and tools."""
+    decision = verdict(probability, threshold)
+    tone = "flag" if decision == "Flagged" else "clear"
     source = f"Preset: {preset}" if preset else "Manual input"
     cells = [
-        ("Decision", f'<span style="color:{color}">{decision}</span>', f"classified {label.lower()}"),
+        ("Verdict", f'<span class="{tone}">{decision}</span>',
+         "route to review" if tone == "flag" else f"below {threshold:.2f}"),
         ("Risk score", f"{probability:.4f}", "form model probability"),
-        ("Cutoff", f"{threshold:.2f}", f"form model · deployed model uses {deployed_threshold:.2f}"),
+        ("Operating threshold", f"{threshold:.2f}", f"cost-optimal | form model optimum {form_threshold:.2f}"),
         ("Input", html_safe(source), "edit any field and reclassify"),
     ]
     st.html(
-        f'<div class="vx-result" style="border-left:3px solid {color};">' + "".join(
+        f'<div class="vx-result is-{tone}">' + "".join(
             f'<div class="vx-cell"><div class="k">{k}</div><div class="v">{v}</div>'
             f'<div class="s">{html_safe(s)}</div></div>'
             for k, v, s in cells) + "</div>"
-        f'<div class="vx-note">Scenario: missed fraud &#36;{FALSE_NEGATIVE_COST:,} · false-positive review '
-        f"&#36;{FALSE_POSITIVE_COST:,} · capacity {DAILY_REVIEW_CAPACITY:,} alerts/day. "
-        "Flag for review means elevated risk warranting review, not a determination of fraud.</div>"
+        f'<div class="vx-note">Scenario: missed fraud &#36;{FALSE_NEGATIVE_COST:,} | false positive '
+        f"&#36;{FALSE_POSITIVE_COST:,} | capacity {DAILY_REVIEW_CAPACITY:,} alerts/day. "
+        "Flagged: elevated risk warranting review, not a determination of fraud.</div>"
         '<div class="vx-actions">'
         '<a class="vx-btn" href="#risk-drivers" target="_self">Inspect drivers ↓</a>'
         '<a class="vx-btn" href="./simulator" target="_self">Test thresholds →</a>'
@@ -1139,8 +1242,8 @@ def page_classify_transaction(main_summary: dict, embedded: bool = False):
     preset_cols = st.columns([1, 1, 1, 3])
     for col, name in zip(preset_cols[:3], FORM_PRESETS, strict=False):
         col.button(name, on_click=apply_preset, args=(name, meta), width="stretch", key=f"preset_{name}")
-    preset_cols[3].caption("Presets fill the form with illustrative values and classify immediately. "
-                           "Time fields are positions in the dataset's relative cycle, not clock dates.")
+    preset_cols[3].caption("Presets load illustrative inputs and classify on click. Hour and day are "
+                           "positions in the relative TransactionDT cycle, not clock time.")
 
     def section(title: str) -> None:
         st.html(f'<div class="vx-section">{html_safe(title)}</div>')
@@ -1214,9 +1317,9 @@ def page_classify_transaction(main_summary: dict, embedded: bool = False):
     }
     X = inf.prepare_single(inputs, meta, bundle["feature_cols"])
     probability = float(bundle["xgb_model"].predict_proba(X)[:, 1][0])
-    threshold = float(bundle["threshold"])
-    result_block(probability, threshold, float(main_summary.get("cost_optimal_threshold", 0.5)),
-                 st.session_state.get("cls_preset"))
+    threshold = float(bundle["threshold"])  # the form model's own cost-optimal cutoff
+    operating = float(main_summary.get("cost_optimal_threshold", 0.5))
+    result_block(probability, operating, threshold, st.session_state.get("cls_preset"))
 
     st.subheader("Risk drivers")
     contributions = explain_rows(bundle["xgb_model"], "form", X, top_n=8)[0]
@@ -1243,12 +1346,11 @@ def page_classify_transaction(main_summary: dict, embedded: bool = False):
     s = bundle["summary"]["test"]
     main_pr = main_summary["xgboost"]["pr_auc"]
     st.caption(md_safe(
-        f"Form model: XGBoost on {bundle['summary']['features']} interpretable fields (masked columns can't be "
-        f"entered by hand). Test window: PR-AUC {s['pr_auc']:.3f} / ROC-AUC {s['roc_auc']:.3f}; at cutoff "
-        f"{threshold:.2f} it catches {s['at_threshold']['recall']:.1%} of fraud at "
-        f"{s['at_threshold']['precision']:.1%} "
-        f"precision. The deployed 451-feature model (PR-AUC {main_pr:.3f}) is more accurate; use Batch upload for "
-        "rows in the IEEE-CIS format."
+        f"Form model: XGBoost, {bundle['summary']['features']} interpretable fields (masked columns are not "
+        f"form inputs). Test window: PR-AUC {s['pr_auc']:.3f} | ROC-AUC {s['roc_auc']:.3f} | at its own "
+        f"{threshold:.2f} cutoff, recall {s['at_threshold']['recall']:.1%} and precision "
+        f"{s['at_threshold']['precision']:.1%}. Deployed 451-feature model: PR-AUC {main_pr:.3f}. "
+        "Use Batch upload for IEEE-CIS rows."
     ))
 
 
@@ -1257,10 +1359,10 @@ def page_batch_classification(bundle: dict, embedded: bool = False):
         st.title("Batch classification")
     threshold = float(bundle["cost_optimal_threshold"])
     st.caption(md_safe(
-        "Upload transactions in the IEEE-CIS format (the columns of Kaggle's train/test_transaction.csv, "
-        f"optionally with the identity file) to classify every row as fraudulent or legitimate with the main "
-        f"451-feature model at threshold {threshold:.2f} (cost-optimal for ${FALSE_NEGATIVE_COST:,} missed fraud "
-        f"/ ${FALSE_POSITIVE_COST:,} false positive). Files are processed in memory and never stored."
+        "Upload IEEE-CIS rows (columns of Kaggle's train/test_transaction.csv, identity file optional). "
+        f"Model: deployed 451-feature XGBoost. Cost-Optimal Threshold: {threshold:.2f} (missed fraud "
+        f"${FALSE_NEGATIVE_COST:,} | false positive ${FALSE_POSITIVE_COST:,}). Files stay in memory and are "
+        "not stored."
     ))
     missing = inference_assets_missing()
     if missing:
@@ -1373,7 +1475,7 @@ def page_batch_classification(bundle: dict, embedded: bool = False):
     st.download_button("Download results (CSV)", shown.to_csv(index=False), "validax_predictions.csv", "text/csv")
 
 
-# ---------------------------------------------------------------- overview --
+# Section: Overview
 def telemetry_strip(summary: dict) -> None:
     """Five system counters in one ruled strip, all read from outputs/."""
     threshold = float(summary.get("cost_optimal_threshold", 0.5))
@@ -1414,10 +1516,9 @@ def page_home(scored: pd.DataFrame, summary: dict) -> None:
     rows = int(summary.get("train_rows", 0)) + int(summary.get("test_rows", 0))
     threshold = float(summary.get("cost_optimal_threshold", 0.5))
     st.html(
-        '<div class="vx-lockup"><h1>Payment fraud classification, with the reasons attached.</h1>'
-        f"<p>Gradient-boosted scoring over {rows:,} labeled IEEE-CIS e-commerce transactions. Each payment is "
-        f"classified fraudulent or legitimate at a cost-optimal cutoff of {threshold:.2f}, with TreeSHAP "
-        "reason codes for the investigator.</p></div>"
+        '<div class="vx-lockup"><h1>Transaction fraud scoring with reason codes</h1>'
+        f"<p>XGBoost classifier trained on {rows:,} labeled IEEE-CIS e-commerce transactions. "
+        f"Cost-Optimal Threshold: {threshold:.2f}. Every alert carries TreeSHAP reason codes.</p></div>"
         '<div class="vx-actions"><a class="vx-btn primary" href="./classify" target="_self">Launch Workspace →</a>'
         '<a class="vx-btn" href="#model-benchmarks" target="_self">Model Benchmarks</a></div>'
     )
@@ -1444,12 +1545,12 @@ def page_home(scored: pd.DataFrame, summary: dict) -> None:
     )
     context = (
         '<div class="vx-box"><div class="head">Operating context</div><div class="body">'
-        "Scores rank transactions for investigator review. A Fraudulent label "
-        "means <strong>elevated risk warranting review, not a determination of fraud</strong>.<br><br>"
-        f"Scenario assumptions: a missed fraud costs &#36;{FALSE_NEGATIVE_COST:,} and a false-positive review "
-        f"&#36;{FALSE_POSITIVE_COST:,}; investigators handle {DAILY_REVIEW_CAPACITY:,} alerts per day.<br><br>"
-        "Masked C1-C14, D1-D15, M1-M9, V1-V339 and id_* columns are shown with generic family labels only, "
-        "never interpreted and never with their values.</div></div>"
+        "Scores rank transactions for review. Flagged: <strong>elevated risk warranting review, not a "
+        "determination of fraud</strong>.<br><br>"
+        f"Scenario: missed fraud &#36;{FALSE_NEGATIVE_COST:,} | false positive &#36;{FALSE_POSITIVE_COST:,} | "
+        f"capacity {DAILY_REVIEW_CAPACITY:,} alerts/day.<br><br>"
+        "Masked C1-C14, D1-D15, M1-M9, V1-V339 and id_* columns: generic family labels only, no values "
+        "shown.</div></div>"
     )
     left, right = st.columns([3, 2], gap="medium")
     with left:
@@ -1461,7 +1562,7 @@ def page_home(scored: pd.DataFrame, summary: dict) -> None:
     page_overview(scored, summary, embedded=True)
 
 
-# ------------------------------------------------------------------- pages --
+# Section: Pages
 def _data():
     return load_scored(), load_summary()
 
@@ -1512,7 +1613,7 @@ NAV_PAGES = [
 ]
 
 
-# --------------------------------------------------------------------- main --
+# Section: Main
 def main():
     st.html(STYLE)
     pages = [st.Page(fn, title=title, url_path=path, default=(i == 0))

@@ -2,7 +2,7 @@
 
 Source: IEEE-CIS Fraud Detection (Kaggle competition, data provided by Vesta
 Corporation). Only the labeled `train_transaction.csv` + `train_identity.csv`
-files are used -- Kaggle's `test_*.csv` files have no isFraud ground truth
+files are used: Kaggle's `test_*.csv` files have no isFraud ground truth
 (they exist only for competition leaderboard scoring), so this project
 carves its own chronological train/test split out of the labeled data
 instead (see src/model.py).
@@ -11,7 +11,7 @@ IMPORTANT: many columns in this dataset are intentionally masked by Vesta.
 Per the competition's own data description, C1-C14 are "counting" features,
 D1-D15 are "timedelta" features, M1-M9 are "match" flags, V1-V339 are
 Vesta-engineered features, and most id_* columns are anonymized identity/
-device signals -- but the exact real-world meaning of any specific column is
+device signals, but the exact real-world meaning of any specific column is
 not disclosed. This project never invents specific meanings for those
 columns (e.g. never claims "C3 = number of phone numbers on file"). They are
 used as opaque numeric/categorical model inputs and referred to generically
@@ -71,7 +71,7 @@ INTERPRETABLE_COLUMNS = [
     "DeviceInfo",
 ]
 
-# Masked column families -- used as model inputs, never given invented
+# Masked column families: used as model inputs, never given invented
 # semantic labels in any narrative/explanation text.
 MASKED_PREFIXES = ("C", "D", "M", "V", "id_")
 
@@ -87,7 +87,7 @@ INTEGER_COLUMNS = {"TransactionID": "int64", "isFraud": "int8", "TransactionDT":
 _DTYPE_SNIFF_ROWS = 5_000
 
 
-# ------------------------------------------------------------------ loading --
+# Section: Loading
 def _require_files(raw_dir: Path) -> tuple[Path, Path]:
     tx_path, id_path = raw_dir / TRANSACTION_FILE, raw_dir / IDENTITY_FILE
     missing = [p for p in (tx_path, id_path) if not p.is_file()]
@@ -149,7 +149,7 @@ def load_raw(raw_dir: Path = RAW_DIR, nrows: int = None) -> pd.DataFrame:
     return df
 
 
-# ----------------------------------------------------------------- cleaning --
+# Section: Cleaning
 def _downcast_numeric(df: pd.DataFrame) -> pd.DataFrame:
     """float64 -> float32 and int64 -> the smallest integer type that fits (in place).
 
@@ -184,7 +184,7 @@ def clean(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-# ------------------------------------------------------------------- checks --
+# Section: Checks
 def check_chronological_split(
     df: pd.DataFrame,
     train_frac: float = TRAIN_FRAC,
@@ -233,7 +233,7 @@ def check_chronological_split(
     return summary
 
 
-# --------------------------------------------------------------------- main --
+# Section: Main
 def run(raw_dir: Path = RAW_DIR, out_path: Path = PROCESSED_PATH,
         expect_full_dataset: bool = True) -> pd.DataFrame:
     df = clean(load_raw(raw_dir))

@@ -2,7 +2,7 @@
 
 Pipeline:
   1. Chronological train/test split on TransactionDT (first 80% -> train,
-     last 20% -> test) -- NOT a random split, so the model is evaluated on
+     last 20% -> test). NOT a random split, so the model is evaluated on
      transactions strictly *after* everything it trained on, which is the
      realistic way to validate a fraud model meant to score future traffic.
   2. Baseline: Logistic Regression on the interpretable feature set only.
@@ -14,7 +14,7 @@ Pipeline:
      500-alert/day investigator review capacity, simulated per day across
      the test period.
   6. Cost-sensitive threshold: minimizes an assumed cost function
-     (false negative = $500, false positive review cost = $10 -- explicitly
+     (false negative = $500, false positive review cost = $10; explicitly
      scenario assumptions, not real industry costs).
   7. SHAP global feature importance + per-transaction local explanations.
 
@@ -218,7 +218,7 @@ def train_xgboost(train: pd.DataFrame, test: pd.DataFrame, feature_cols: list, p
     return model, proba, metrics
 
 
-# ------------------------------------------------------- model comparison --
+# Section: Model comparison
 def comparison_models(random_state: int = RANDOM_STATE) -> dict:
     """The classical / neural models benchmarked against the XGBoost champion.
 
@@ -290,7 +290,7 @@ def train_comparison_models(
     return results, probas, prep, fitted
 
 
-# ----------------------------------------------------------------- tuning --
+# Section: Tuning
 def tune_xgboost(
     train: pd.DataFrame,
     feature_cols: list,
@@ -346,7 +346,7 @@ def best_params_from_search(search: pd.DataFrame, val_frac: float = 0.2) -> dict
     return params
 
 
-# ------------------------------------------------------------- clustering --
+# Section: Clustering
 def cluster_matrix(df: pd.DataFrame, cols: list = None) -> pd.DataFrame:
     """Interpretable cluster inputs with heavy-tailed counts/ratios log-scaled.
 
@@ -514,7 +514,7 @@ def global_feature_importance(shap_values, feature_names: list) -> pd.DataFrame:
     )
 
 
-# ------------------------------------------------------- model bundle I/O --
+# Section: Model bundle I/O
 def build_model_bundle(
     xgb_model: xgb.XGBClassifier,
     logreg_pipe: Pipeline,
@@ -582,20 +582,20 @@ def main():
     OUTPUTS_DIR.mkdir(exist_ok=True)
     MODEL_PATH.parent.mkdir(exist_ok=True)
 
-    # --- threshold sweep ---
+    # Threshold sweep
     sweep = threshold_sweep(y_test, xgb_proba)
     sweep.to_csv(OUTPUTS_DIR / "threshold_sweep.csv", index=False)
     print("\nThreshold sweep:\n", sweep.round(4).to_string(index=False))
 
-    # --- fixed capacity (single global top-K, as a headline number) ---
+    # Fixed capacity (single global top-K, as a headline number)
     cap500 = capacity_at_k(y_test, xgb_proba, k=DAILY_REVIEW_CAPACITY)
     print(f"\nFraud Capture@{DAILY_REVIEW_CAPACITY}: {cap500}")
 
-    # --- realistic per-day capacity simulation ---
+    # Realistic per-day capacity simulation
     daily = daily_capacity_simulation(test, xgb_proba, capacity=DAILY_REVIEW_CAPACITY)
     daily.to_csv(OUTPUTS_DIR / "daily_capacity_simulation.csv", index=False)
 
-    # --- cost-sensitive threshold ---
+    # Cost-sensitive threshold
     cost_curve = cost_sensitive_threshold(y_test, xgb_proba)
     cost_curve.to_csv(OUTPUTS_DIR / "cost_sensitive_threshold.csv", index=False)
     best_row = cost_curve.loc[cost_curve["total_cost"].idxmin()]
@@ -603,14 +603,14 @@ def main():
           f"(total scenario cost ${best_row['total_cost']:,.0f}, "
           f"precision={best_row['precision']:.3f}, recall={best_row['recall']:.3f})")
 
-    # --- SHAP ---
+    # SHAP
     X_test = test[feature_cols]
     explainer, shap_values, X_sample = compute_shap(xgb_model, X_test, sample_size=20000)
     importance = global_feature_importance(shap_values, feature_cols)
     importance.to_csv(OUTPUTS_DIR / "feature_importance.csv", index=False)
     print("\nTop 15 features by mean |SHAP|:\n", importance.head(15).to_string(index=False))
 
-    # --- persist artifacts ---
+    # Persist artifacts
     # Running this script is an explicit retrain, so it replaces the deployed bundle.
     bundle = build_model_bundle(
         xgb_model, logreg_pipe, feature_cols, best_row["threshold"],

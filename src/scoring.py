@@ -1,13 +1,13 @@
 """Produce the investigator-facing risk scoring table.
 
 Scores every transaction in the (chronological) test split, assigns a risk
-tier, and -- for anything at or above the Medium tier, i.e. what would
-actually enter an alert queue -- generates plain-English SHAP reason codes.
+tier and, for anything at or above the Medium tier (what would actually
+enter an alert queue), generates plain-English SHAP reason codes.
 
 Reason-code labels are written by hand per interpretable feature. Masked
 C1-C14 / D1-D15 / M1-M9 / V1-V339 / id_* columns get a generic, family-level
 label (e.g. "masked Vesta-engineered feature (V70)"), never an invented
-specific meaning, and their raw values are never shown in a reason code --
+specific meaning, and their raw values are never shown in a reason code,
 consistent with src/features.py and the competition's own data description.
 
 Time-derived features are labeled as positions in the *relative*

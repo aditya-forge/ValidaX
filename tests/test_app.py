@@ -98,18 +98,51 @@ def test_classify_form_submits_and_predicts():
     [b for b in at.button if b.label == "Classify transaction"][0].click().run()
     assert not at.exception, [e.message for e in at.exception]
     values, body = _result_values(at)
-    assert values[0] in ("Flag for review", "No alert") and len(values[1]) == 6      # 4-decimal score
+    assert values[0] in ("Flagged", "Legitimate") and len(values[1]) == 6           # 4-decimal score
+    assert values[2] == "0.24"                                                       # operating threshold
     assert "&#36;500" in body and "&#36;10" in body and "500 alerts/day" in body
     reasons = next(h.proto.body for h in at.get("html") if 'class="reasons"' in h.proto.body)
     assert reasons.count("<li") == 5
 
 
-@pytest.mark.parametrize("preset, decision", [("Typical repeat card", "No alert"),
-                                              ("First-seen card", "Flag for review"),
-                                              ("High-risk spike", "Flag for review")])
+@pytest.mark.parametrize("preset, decision", [("Typical repeat card", "Legitimate"),
+                                              ("First-seen card", "Flagged"),
+                                              ("High-risk spike", "Flagged")])
 def test_presets_classify_in_one_click(preset, decision):
     at = run_page("render_classify")
     at.button(key=f"preset_{preset}").click().run()
     assert not at.exception and not at.warning
     values, _ = _result_values(at)
     assert values[0] == decision and values[3] == f"Preset: {preset}"
+
+
+def test_both_themes_share_one_stylesheet(console):
+    """Every custom colour is a light-dark() pair; no hard-coded hex outside the token table."""
+    import re
+    assert console.PALETTE["canvas"] == ("#F8FAFC", "#0A0E17")
+    assert console.PALETTE["accent"] == ("#0284C7", "#38BDF8")
+    css = re.sub(r'url\("data:[^)]*\)', "", console.STYLE)
+    assert "light-dark(" in css
+    assert not re.findall(r"#[0-9A-Fa-f]{6}", re.sub(r"light-dark\([^)]*\)", "", css))
+    assert "box-shadow: none" in css and "gradient" not in css
+
+
+def test_theme_switch_targets_every_page(console):
+    switch = console.theme_switch_html()
+    assert "stActiveTheme-" in switch and "__" not in switch
+    for _, _, path in console.NAV_PAGES:
+        assert f'"{path}"' in switch
+    assert '"Light"' in switch and '"Dark"' in switch
+
+
+def test_why_flagged_falls_back_to_stored_reasons():
+    """Without the feature parquet, Investigate shows stored reason codes and no CLI commands."""
+    script = PAGE_SCRIPT.replace("st.html(app.STYLE)",
+                                 "st.html(app.STYLE)\napp.FEATURES_PATH = app.ROOT / 'missing.parquet'")
+    at = AppTest.from_string(script.format(app=REPO / "app" / "app.py", render="render_investigate"),
+                             default_timeout=300).run()
+    assert not at.exception and not at.error and not at.info
+    bodies = " ".join(h.proto.body for h in at.get("html"))
+    assert "Showing reason codes stored by the scoring run" in bodies and 'class="reasons"' in bodies
+    shown = bodies + " ".join(c.value for c in at.caption) + " ".join(m.value for m in at.markdown)
+    assert "python src/" not in shown

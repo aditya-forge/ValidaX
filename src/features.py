@@ -2,7 +2,7 @@
 
 Two tiers of features:
 
-1. Interpretable business features -- built from columns whose real-world
+1. Interpretable business features: built from columns whose real-world
    meaning IS documented by the competition (amount, time offset, product,
    card network/type, email domain, device, address/distance) plus genuinely
    new features derived from them (free-email flag, email-domain match,
@@ -18,7 +18,7 @@ Two tiers of features:
    claim to be real local night-time or a real Saturday/Sunday; the column
    names are kept because the trained model bundle depends on them.
 
-2. Masked engineered features -- the raw C1-C14 / D1-D15 / M1-M9 / V1-V339 /
+2. Masked engineered features: the raw C1-C14 / D1-D15 / M1-M9 / V1-V339 /
    id_* columns, used as opaque numeric/categorical model inputs. Per the
    competition's own data description their exact real-world meaning is
    masked by Vesta, and this project does NOT invent specific interpretations
@@ -97,7 +97,7 @@ def add_card_velocity_features(df: pd.DataFrame) -> pd.DataFrame:
     card1 is a high-cardinality, low-missingness numeric card-attribute code
     that the fraud-detection community commonly uses as a pseudo account
     identifier for exactly this purpose. We don't claim to know what card1
-    literally encodes -- only that grouping by it and ordering by
+    literally encodes, only that grouping by it and ordering by
     TransactionDT gives a meaningful "this card's recent activity" signal.
 
     Leakage control: rows are put in a stable (card1, TransactionDT,
@@ -145,7 +145,7 @@ def add_masked_meta_features(df: pd.DataFrame) -> pd.DataFrame:
     """Missingness meta-features over masked column families.
 
     These describe how much Vesta-engineered / counting / timedelta / match
-    data was populated for a transaction -- not what that data means.
+    data was populated for a transaction, not what that data means.
     """
     df = df.copy()
     v_cols = [c for c in df.columns if c.startswith("V")]

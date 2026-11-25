@@ -42,7 +42,7 @@ REQUIRED_BATCH_COLUMNS = ("TransactionID", "TransactionDT", "TransactionAmt", "c
 FRAUDULENT, LEGITIMATE = "Fraudulent", "Legitimate"
 
 
-# ------------------------------------------------------------------ helpers --
+# Section: Helpers
 def normalize_columns(frame: pd.DataFrame) -> pd.DataFrame:
     """Kaggle's test_identity.csv uses ``id-01``; training used ``id_01``."""
     return frame.rename(columns=lambda c: c.replace("id-", "id_") if c.startswith("id-") else c)
@@ -109,7 +109,7 @@ def add_velocity_with_history(frame: pd.DataFrame, history: pd.DataFrame) -> pd.
     return out.sort_values("TransactionID", kind="mergesort")
 
 
-# -------------------------------------------------------------- artifacts --
+# Section: Artifacts
 def load_metadata(path: Path = METADATA_PATH) -> dict:
     return json.loads(Path(path).read_text(encoding="utf-8"))
 
@@ -128,7 +128,7 @@ def build_card_history(reference: pd.DataFrame) -> pd.DataFrame:
     )
 
 
-# ------------------------------------------------------------ batch (CSV) --
+# Section: Batch (CSV)
 def read_batch_csv(source, metadata: dict, nrows: int | None = None) -> pd.DataFrame:
     """Read an uploaded IEEE-CIS CSV with the training dtypes (text vs float)."""
     header = pd.read_csv(source, nrows=0)
@@ -181,7 +181,7 @@ def prepare_batch(raw: pd.DataFrame, metadata: dict, history: pd.DataFrame, feat
     return frame.set_index("TransactionID", drop=False).loc[order, feature_cols]
 
 
-# ---------------------------------------------------------- single (form) --
+# Section: Single (form)
 def prepare_single(inputs: dict, metadata: dict, feature_cols: list) -> pd.DataFrame:
     """One form entry -> the interpretable model's features (one-row DataFrame).
 
@@ -216,7 +216,7 @@ def prepare_single(inputs: dict, metadata: dict, feature_cols: list) -> pd.DataF
     return frame[feature_cols]
 
 
-# ----------------------------------------------------------------- build --
+# Section: Build
 def build_artifacts(clean_path: Path, features_path: Path, out_dir: Path = ARTIFACTS_DIR) -> dict:
     """Write inference_metadata.json and card_history.csv from the processed parquet files."""
     import pyarrow.parquet as pq
