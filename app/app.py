@@ -72,7 +72,8 @@ OPTIONAL_OUTPUTS = {
 
 TIERS = ["Critical", "High", "Medium", "Low"]
 
-st.set_page_config(page_title="ValidaX | Payment Fraud Intelligence", page_icon="🛡️", layout="wide")
+st.set_page_config(page_title="ValidaX | Payment Fraud Intelligence",
+                   page_icon=str(Path(__file__).resolve().parent / "assets" / "validax-icon.svg"), layout="wide")
 
 # Design system
 # Flat, rectangular UI in two themes: one canvas, one surface, 1px rules, 4px corners,
@@ -315,17 +316,24 @@ def html_safe(text: str) -> str:
 _THEME_SWITCH = """
 <style>
 :root { color-scheme: normal; }  /* match the host iframe so Chrome keeps the frame transparent */
-html, body { margin: 0; background: transparent; font: 500 12px/1 'IBM Plex Sans', system-ui, sans-serif; }
-.seg { display: flex; box-sizing: border-box; width: 100%; border: 1px solid var(--rule); border-radius: 4px;
-       overflow: hidden; }
-button { all: unset; flex: 1; text-align: center; cursor: pointer; padding: 9px 0; color: var(--muted);
-         background: var(--surface); }
+html, body { margin: 0; background: transparent; }
+body { display: flex; justify-content: flex-end; }
+.seg { display: flex; border: 1px solid var(--rule); border-radius: 4px; overflow: hidden; background: var(--surface); }
+button { all: unset; box-sizing: border-box; width: 34px; height: 32px; display: grid; place-items: center;
+         cursor: pointer; color: var(--muted); }
 button + button { border-left: 1px solid var(--rule); }
-button[aria-pressed="true"] { color: var(--on); background: var(--accent); cursor: default; }
+button:hover { color: var(--ink); }
+button[aria-pressed="true"] { color: var(--ink); background: var(--raise); cursor: default; }
 button:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; }
 </style>
 <div class="seg" role="group" aria-label="Theme">
-  <button type="button" data-theme="Dark">Dark</button><button type="button" data-theme="Light">Light</button>
+  <button type="button" data-theme="Light" aria-label="Light theme" title="Light theme">
+    <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2
+      M5.3 5.3l1.4 1.4M17.3 17.3l1.4 1.4M5.3 18.7l1.4-1.4M17.3 6.7l1.4-1.4"/></svg>
+  </button><button type="button" data-theme="Dark" aria-label="Dark theme" title="Dark theme">
+    <svg viewBox="0 0 24 24"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5Z" stroke-linejoin="round"/></svg>
+  </button>
 </div>
 <script>
 const app = window.parent, COLORS = __COLORS__, PAGES = __PAGES__;
@@ -357,8 +365,9 @@ setInterval(paint, 800);
 
 
 def theme_switch_html() -> str:
+    raise_ = {"Light": "#F1F5F9", "Dark": "#1E293B"}  # active button surface
     colors = {name: {"surface": PALETTE["surface"][i], "rule": PALETTE["rule"][i], "muted": PALETTE["muted"][i],
-                     "accent": PALETTE["accent"][i], "on": PALETTE["on_accent"][i]}
+                     "ink": PALETTE["ink"][i], "accent": PALETTE["accent"][i], "raise": raise_[name]}
               for i, name in enumerate(("Light", "Dark"))}
     return (_THEME_SWITCH.replace("__COLORS__", json.dumps(colors))
             .replace("__PAGES__", json.dumps([path for _, _, path in NAV_PAGES])))
@@ -369,14 +378,14 @@ def brand_header(threshold: float) -> None:
     with st.container(key="vx_brand"):
         left, right = st.columns([3, 2], vertical_alignment="center")
         left.html(f'<div class="vx-mark">{LOGO_HTML}<span class="desc">Payment Fraud Intelligence</span></div>')
-        status, switch = right.columns([5, 2], vertical_alignment="center")
+        status, switch = right.columns([5, 1], vertical_alignment="center")
         status.html(
             f'<div class="vx-status-row"><div class="vx-status"><span class="dot">●</span> Active'
             f'<span class="sep">·</span>Threshold {threshold:.2f}<span class="sep">·</span>'
             f'{DAILY_REVIEW_CAPACITY:,}/day cap</div></div>'
         )
         with switch:
-            st.iframe(theme_switch_html(), width=118, height=34, alt="Theme switch: dark or light")
+            st.iframe(theme_switch_html(), height=34, alt="Theme switch: light or dark")
 
 
 def operational_context_banner() -> None:
