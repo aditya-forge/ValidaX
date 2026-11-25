@@ -42,7 +42,8 @@ def test_classification_table_counts(console):
 
 
 @pytest.mark.skipif(not (REPO / "outputs" / "scored_transactions.csv").exists(), reason="outputs/ not present")
-@pytest.mark.parametrize("page", ["Fraud overview", "Alert queue", "Threshold simulator"])
+@pytest.mark.parametrize("page", ["Classify a transaction", "Batch classification", "Fraud overview",
+                                  "Alert queue", "Threshold simulator"])
 def test_pages_render_without_errors(page):
     before = {p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in PROTECTED}
     at = AppTest.from_file(str(REPO / "app" / "app.py"), default_timeout=300).run()
@@ -53,3 +54,14 @@ def test_pages_render_without_errors(page):
                for h in at.get("html"))
     after = {p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in PROTECTED}
     assert before == after
+
+
+def test_classify_form_submits_and_predicts():
+    at = AppTest.from_file(str(REPO / "app" / "app.py"), default_timeout=300).run()
+    at.sidebar.radio[0].set_value("Classify a transaction").run()
+    at.button[0].click().run()
+    assert not at.exception, [e.message for e in at.exception]
+    verdict = next(h.proto.body for h in at.get("html") if "Prediction</div>" in h.proto.body)
+    assert ("Fraudulent" in verdict) or ("Legitimate" in verdict)
+    reasons = next(h.proto.body for h in at.get("html") if 'class="reasons"' in h.proto.body)
+    assert reasons.count("<li") == 5
