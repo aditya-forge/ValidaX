@@ -1,27 +1,28 @@
 # ValidaX dark theme. Streamlit renders widgets, menus and data tables from these
-# values, so the whole app stays dark with no light-theme fallbacks.
+# values, so the whole app stays dark with no light-theme fallbacks. Keep in sync
+# with the design tokens at the top of app/app.py.
 [theme]
 base = "dark"
-primaryColor = "#238636"
-backgroundColor = "#0E1117"
-secondaryBackgroundColor = "#161B22"
-textColor = "#F0F6FC"
-linkColor = "#58A6FF"
-borderColor = "#30363D"
-dataframeBorderColor = "#30363D"
-dataframeHeaderBackgroundColor = "#161B22"
+primaryColor = "#0EA5E9"
+backgroundColor = "#0A0E17"
+secondaryBackgroundColor = "#111726"
+textColor = "#F8FAFC"
+linkColor = "#38BDF8"
+borderColor = "#1E293B"
+dataframeBorderColor = "#1E293B"
+dataframeHeaderBackgroundColor = "#111726"
 showWidgetBorder = true
 baseRadius = "4px"
 buttonRadius = "4px"
 font = "sans-serif"
-codeBackgroundColor = "#161B22"
-chartCategoricalColors = ["#58A6FF", "#3FB950", "#D29922", "#F85149", "#A371F7", "#8B949E"]
+codeBackgroundColor = "#111726"
+chartCategoricalColors = ["#38BDF8", "#22C55E", "#EAB308", "#F43F5E", "#A78BFA", "#94A3B8"]
 
 [theme.sidebar]
-backgroundColor = "#0E1117"
-secondaryBackgroundColor = "#161B22"
-textColor = "#F0F6FC"
-borderColor = "#30363D"
+backgroundColor = "#0A0E17"
+secondaryBackgroundColor = "#111726"
+textColor = "#F8FAFC"
+borderColor = "#1E293B"
 
 [browser]
 gatherUsageStats = false

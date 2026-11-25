@@ -78,31 +78,40 @@ st.set_page_config(page_title="ValidaX | Payment Validation Engine", layout="wid
 # ---------------------------------------------------------------- design --
 # Flat, rectangular system UI: one canvas, one card surface, 1px rules, 4px corners.
 # The same tokens drive .streamlit/config.toml so native widgets and tables match.
-CANVAS = "#0E1117"
-CARD = "#161B22"
-RULE = "#30363D"
-INK = "#F0F6FC"
-BODY = "#C9D1D9"
-MUTED = "#8B949E"
-ACCENT = "#238636"
-POSITIVE = "#3FB950"
-DATA = "#58A6FF"
+CANVAS = "#0A0E17"      # deep obsidian navy
+CARD = "#111726"        # panels, forms, tables, telemetry
+RULE = "#1E293B"        # 1px borders
+GRID = "#172033"        # chart gridlines, quieter than RULE
+INK = "#F8FAFC"
+BODY = "#CBD5E1"
+MUTED = "#94A3B8"
+CYAN = "#38BDF8"        # telemetry cyan: nav indicators, status, links
+ACCENT = "#0EA5E9"      # steel blue: primary rectangular actions
+ACCENT_HOVER = CYAN
+ON_ACCENT = CANVAS      # dark text on blue keeps button contrast above 7:1
+POSITIVE = "#22C55E"    # "No alert" decisions only
+DATA = CYAN
 PANEL = CARD
 RADIUS = "4px"
-RISK_COLORS = {"Critical": "#F85149", "High": "#DB6D28", "Medium": "#D29922", "Low": "#6E7681"}
+RISK_COLORS = {"Critical": "#F43F5E", "High": "#F97316", "Medium": "#EAB308", "Low": "#64748B"}
 INCREASES_RISK, DECREASES_RISK = RISK_COLORS["Critical"], DATA
 FONT_STACK = "'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif"
 MONO_STACK = "'IBM Plex Mono', ui-monospace, SFMono-Regular, Consolas, monospace"
 
-# Geometric mark: a square frame with a check cut through it. Embedded as an image
-# because st.html sanitises inline <svg>.
+# Shield mark with a crossed X, plus the wordmark. Embedded as an image because
+# st.html sanitises inline <svg>.
 _LOGO_MARKUP = (
-    '<svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 28 28" fill="none">'
-    f'<rect x="1" y="1" width="26" height="26" rx="3" fill="{CARD}" stroke="{INK}" stroke-width="2"/>'
-    f'<path d="M7 14.5l4.5 4.5L21 9" stroke="{POSITIVE}" stroke-width="3" stroke-linecap="square"/>'
+    # viewBox cropped to the wordmark's width so no empty space sits before the divider.
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 136 40" width="136" height="40" fill="none">'
+    f'<path d="M4 5 H32 V20 C32 29.5 25.5 34.5 18 37 C10.5 34.5 4 29.5 4 20 V5 Z" stroke="{INK}" '
+    'stroke-width="2" stroke-linejoin="miter"/>'
+    f'<line x1="11" y1="12" x2="25" y2="28" stroke="{CYAN}" stroke-width="2.2" stroke-linecap="square"/>'
+    f'<line x1="25" y1="12" x2="11" y2="28" stroke="{INK}" stroke-width="2.2" stroke-linecap="square"/>'
+    f'<text x="44" y="27" fill="{INK}" font-family="Inter, system-ui, -apple-system, \'Segoe UI\', sans-serif" '
+    f'font-size="20" font-weight="600" letter-spacing="-0.02em">Valida<tspan fill="{CYAN}">X</tspan></text>'
     '</svg>'
 )
-LOGO_SVG = ('<img alt="ValidaX" width="28" height="28" src="data:image/svg+xml;base64,'
+LOGO_SVG = ('<img alt="ValidaX" width="122" height="36" src="data:image/svg+xml;base64,'
             + base64.b64encode(_LOGO_MARKUP.encode()).decode() + '">')
 
 STYLE = f"""
@@ -120,6 +129,25 @@ h3 {{ font-size: 1rem !important; font-weight: 600 !important; color: {INK} !imp
 /* Top bar: flat, ruled, no shadow. */
 [data-testid="stHeader"] {{ background: {CANVAS}; border-bottom: 1px solid {RULE}; box-shadow: none; }}
 [data-testid="stSidebar"], [data-testid="stSidebarCollapsedControl"] {{ display: none; }}
+/* Top nav: flat links; the active page gets a 2px cyan underline, not a filled chip. */
+[data-testid="stTopNavLink"] {{ background: transparent !important; border-radius: 0 !important;
+    border-bottom: 2px solid transparent; }}
+[data-testid="stTopNavLink"] p {{ color: {MUTED} !important; font-weight: 500; }}
+[data-testid="stTopNavLink"]:hover p {{ color: {INK} !important; }}
+[data-testid="stTopNavLink"][aria-current="page"] {{ border-bottom-color: {CYAN}; }}
+[data-testid="stTopNavLink"][aria-current="page"] p {{ color: {INK} !important; }}
+[data-testid="stBaseButton-header"] {{ color: {MUTED}; }}
+
+/* Native buttons: rectangular; primary is steel blue with dark text. */
+[data-testid="stBaseButton-primary"], [data-testid="stBaseButton-primaryFormSubmit"] {{
+    background: {ACCENT} !important; border: 1px solid {ACCENT} !important; color: {ON_ACCENT} !important; }}
+[data-testid="stBaseButton-primary"] p, [data-testid="stBaseButton-primaryFormSubmit"] p {{
+    color: {ON_ACCENT} !important; font-weight: 600; }}
+[data-testid="stBaseButton-primary"]:hover, [data-testid="stBaseButton-primaryFormSubmit"]:hover {{
+    background: {ACCENT_HOVER} !important; border-color: {ACCENT_HOVER} !important; }}
+[data-testid="stBaseButton-secondary"] {{ background: {CARD}; border: 1px solid {RULE}; }}
+[data-testid="stBaseButton-secondary"]:hover {{ border-color: {CYAN}; color: {INK}; }}
+.stApp a:focus-visible, .stApp button:focus-visible {{ outline: 2px solid {CYAN}; outline-offset: 2px; }}
 
 /* Rectangular surfaces: metrics, tables, charts, expanders, bordered containers. */
 [data-testid="stMetric"] {{
@@ -140,18 +168,20 @@ h3 {{ font-size: 1rem !important; font-weight: 600 !important; color: {INK} !imp
 [data-testid="stForm"] [data-testid="stVerticalBlockBorderWrapper"],
 .stTabs [data-testid="stVerticalBlockBorderWrapper"] {{ background: {CARD}; border-color: {RULE}; }}
 .stTabs [data-baseweb="tab-list"] {{ border-bottom: 1px solid {RULE}; gap: 0; }}
-.stTabs [data-baseweb="tab"] p {{ font-weight: 500; }}
+.stTabs [data-baseweb="tab"] p {{ font-weight: 500; color: {MUTED}; }}
+.stTabs [data-baseweb="tab"][aria-selected="true"] p {{ color: {INK}; }}
+.stTabs [data-baseweb="tab-highlight"] {{ background-color: {CYAN} !important; }}
 hr {{ border-color: {RULE} !important; }}
 
 /* Brand row and status badge. */
 .vx-top {{ display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap;
     padding: 0 0 0.9rem 0; margin-bottom: 1.1rem; border-bottom: 1px solid {RULE}; }}
 .vx-mark {{ display: flex; align-items: center; gap: 0.65rem; }}
-.vx-mark .name {{ color: {INK}; font-size: 1.05rem; font-weight: 700; letter-spacing: -0.01em; }}
+.vx-mark img {{ display: block; }}
 .vx-mark .desc {{ color: {MUTED}; font-size: 0.85rem; padding-left: 0.65rem; border-left: 1px solid {RULE}; }}
-.vx-status {{ color: {BODY}; font-size: 0.8rem; border: 1px solid {RULE}; border-radius: {RADIUS};
-    padding: 0.28rem 0.6rem; background: {CARD}; white-space: nowrap; }}
-.vx-status .dot {{ color: {POSITIVE}; }}
+.vx-status {{ color: {BODY}; font-size: 0.8rem; border: 1px solid {RULE}; border-left: 2px solid {CYAN};
+    border-radius: {RADIUS}; padding: 0.28rem 0.6rem; background: {CARD}; white-space: nowrap; }}
+.vx-status .dot {{ color: {CYAN}; }}
 .vx-status .sep {{ color: {MUTED}; padding: 0 0.3rem; }}
 
 /* Overview: title lockup, command callout, context box, telemetry strip. */
@@ -169,7 +199,7 @@ hr {{ border-color: {RULE} !important; }}
 .vx-box pre {{ margin: 0; font-family: {MONO_STACK}; font-size: 0.8rem; line-height: 1.7; color: {BODY};
     white-space: pre-wrap; overflow-wrap: anywhere; background: transparent; }}
 .vx-box pre .c {{ color: {MUTED}; }}
-.vx-box pre .p {{ color: {POSITIVE}; }}
+.vx-box pre .p {{ color: {CYAN}; }}
 .vx-kv {{ display: grid; grid-template-columns: max-content 1fr; column-gap: 1rem; row-gap: 0.3rem; margin-top: 0.7rem;
     padding-top: 0.65rem; border-top: 1px solid {RULE}; font-size: 0.82rem; }}
 .vx-kv .k {{ color: {MUTED}; }}
@@ -198,9 +228,9 @@ hr {{ border-color: {RULE} !important; }}
 .vx-actions {{ display: flex; gap: 0.6rem; flex-wrap: wrap; margin: 1rem 0 1.1rem 0; }}
 .vx-btn {{ display: inline-block; padding: 0.5rem 1rem; border-radius: {RADIUS}; font-size: 0.88rem; font-weight: 500;
     text-decoration: none !important; border: 1px solid {RULE}; color: {INK} !important; background: {CARD}; }}
-.vx-btn:hover {{ border-color: {MUTED}; }}
-.vx-btn.primary {{ background: {ACCENT}; border-color: {ACCENT}; }}
-.vx-btn.primary:hover {{ background: #2EA043; border-color: #2EA043; }}
+.vx-btn:hover {{ border-color: {CYAN}; }}
+.vx-btn.primary {{ background: {ACCENT}; border-color: {ACCENT}; color: {ON_ACCENT} !important; font-weight: 600; }}
+.vx-btn.primary:hover {{ background: {ACCENT_HOVER}; border-color: {ACCENT_HOVER}; }}
 
 /* Form section headers. */
 .vx-section {{ color: {INK}; font-weight: 600; font-size: 0.92rem; padding-bottom: 0.45rem; margin-bottom: 0.2rem;
@@ -218,8 +248,8 @@ PLOT_LAYOUT = dict(
     plot_bgcolor=CARD,
     margin=dict(l=14, r=14, t=46, b=14),
     title=dict(x=0.01, xanchor="left", font=dict(size=14, color=INK)),
-    xaxis=dict(gridcolor="#21262D", linecolor=RULE, zeroline=False, tickfont=dict(color=MUTED)),
-    yaxis=dict(gridcolor="#21262D", linecolor=RULE, zeroline=False, tickfont=dict(color=MUTED)),
+    xaxis=dict(gridcolor=GRID, linecolor=RULE, zeroline=False, tickfont=dict(color=MUTED)),
+    yaxis=dict(gridcolor=GRID, linecolor=RULE, zeroline=False, tickfont=dict(color=MUTED)),
     legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1, title_text="",
                 font=dict(color=BODY)),
     hoverlabel=dict(font_family=FONT_STACK, bgcolor=CANVAS, bordercolor=RULE, font_color=INK),
@@ -245,7 +275,7 @@ def html_safe(text: str) -> str:
 def brand_header(threshold: float) -> None:
     """Top-left mark and product name; top-right live status badge."""
     st.html(
-        f'<div class="vx-top"><div class="vx-mark">{LOGO_SVG}<span class="name">ValidaX</span>'
+        f'<div class="vx-top"><div class="vx-mark">{LOGO_SVG}'
         '<span class="desc">Payment Validation Engine</span></div>'
         f'<div class="vx-status"><span class="dot">●</span> Active<span class="sep">·</span>'
         f'Threshold {threshold:.2f}<span class="sep">·</span>{DAILY_REVIEW_CAPACITY:,}/day cap</div></div>'
@@ -1007,7 +1037,7 @@ def page_threshold_simulator(scored: pd.DataFrame, summary: dict):
     st.subheader(f"Fixed capacity: {DAILY_REVIEW_CAPACITY:,} alerts per day")
     daily = load_output_csv("daily_capacity_simulation.csv")
     fig = go.Figure()
-    fig.add_trace(go.Bar(x=daily["day"], y=daily["fraud_in_day"], name="Frauds that day", marker_color="#484F58"))
+    fig.add_trace(go.Bar(x=daily["day"], y=daily["fraud_in_day"], name="Frauds that day", marker_color="#334155"))
     fig.add_trace(go.Bar(x=daily["day"], y=daily["fraud_captured"], name="Caught within capacity",
                          marker_color=DATA))
     st.plotly_chart(styled(fig, "Daily fraud capture under a fixed review capacity", barmode="overlay",
